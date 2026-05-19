@@ -2,7 +2,7 @@ using UnityEngine;
 
 /// <summary>
 /// Detects collisions between the player and obstacles or collectibles.
-/// Uses Unity trigger/collision callbacks.
+/// Supports shield power-up absorption.
 /// </summary>
 public class PlayerCollision : MonoBehaviour
 {
@@ -24,25 +24,25 @@ public class PlayerCollision : MonoBehaviour
     {
         if (GameManager.Instance == null || !GameManager.Instance.IsGameRunning) return;
 
-        // Check if we hit an obstacle
         if (((1 << hit.gameObject.layer) & obstacleLayer) != 0)
         {
             HandleObstacleHit(hit.gameObject);
         }
     }
 
-    // Called when entering a trigger collider (coins use triggers)
+    // Called when entering a trigger collider
     private void OnTriggerEnter(Collider other)
     {
         if (GameManager.Instance == null || !GameManager.Instance.IsGameRunning) return;
 
-        // Check collectible
+        // Collectible
         if (((1 << other.gameObject.layer) & collectibleLayer) != 0)
         {
             HandleCollectible(other.gameObject);
+            return;
         }
 
-        // Also check obstacle triggers (some obstacles use triggers)
+        // Obstacle trigger
         if (((1 << other.gameObject.layer) & obstacleLayer) != 0)
         {
             HandleObstacleHit(other.gameObject);
@@ -51,18 +51,31 @@ public class PlayerCollision : MonoBehaviour
 
     private void HandleObstacleHit(GameObject obstacle)
     {
-        Debug.Log($"[PlayerCollision] Hit obstacle: {obstacle.name}");
+        // Check if shield absorbs the hit
+        if (PowerUpManager.Instance != null && PowerUpManager.Instance.TryAbsorbHit())
+        {
+            Debug.Log("[PlayerCollision] Shield absorbed hit from: " + obstacle.name);
+            return;
+        }
+
+        Debug.Log("[PlayerCollision] Hit obstacle: " + obstacle.name);
+        AudioManager.Instance?.PlayCollision();
         _playerController?.OnHitObstacle();
     }
 
     private void HandleCollectible(GameObject collectible)
     {
-        Debug.Log($"[PlayerCollision] Collected: {collectible.name}");
+        Debug.Log("[PlayerCollision] Collected: " + collectible.name);
 
-        // Add score
-        ScoreManager.Instance?.AddCoinScore();
+        // Score with multiplier
+        float multiplier = PowerUpManager.Instance != null
+            ? PowerUpManager.Instance.GetScoreMultiplier()
+            : 1f;
 
-        // Notify the collectible so it can play effects and deactivate
+        ScoreManager.Instance?.AddCoinScore(multiplier);
+        AudioManager.Instance?.PlayCoinPickup();
+
+        // Notify the collectible
         collectible.GetComponent<Collectible>()?.OnCollected();
     }
 }

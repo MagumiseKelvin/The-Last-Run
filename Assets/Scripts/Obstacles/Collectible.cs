@@ -3,7 +3,7 @@ using System.Collections;
 
 /// <summary>
 /// Represents a collectible item (coin or relic).
-/// Handles visual feedback on collection and deactivation.
+/// Handles visual feedback, score popup, and pool-safe deactivation.
 /// </summary>
 public class Collectible : MonoBehaviour
 {
@@ -18,9 +18,9 @@ public class Collectible : MonoBehaviour
 
     [Header("Effects")]
     public GameObject collectParticlePrefab;
-    public AudioClip collectSound;
+    public AudioClip  collectSound;
 
-    private bool _collected = false;
+    protected bool _collected = false;
 
     private void Update()
     {
@@ -31,7 +31,7 @@ public class Collectible : MonoBehaviour
     }
 
     /// <summary>Called by PlayerCollision when this item is picked up.</summary>
-    public void OnCollected()
+    public virtual void OnCollected()
     {
         if (_collected) return;
         _collected = true;
@@ -40,27 +40,31 @@ public class Collectible : MonoBehaviour
         if (collectParticlePrefab != null)
             Instantiate(collectParticlePrefab, transform.position, Quaternion.identity);
 
-        // Play sound
-        if (collectSound != null)
+        // Play sound via AudioManager if available, otherwise fallback
+        if (AudioManager.Instance != null)
+            AudioManager.Instance.PlayCoinPickup();
+        else if (collectSound != null)
             AudioSource.PlayClipAtPoint(collectSound, transform.position);
 
-        // Hide and deactivate
+        // Floating score popup
+        ScorePopupSpawner.Instance?.SpawnPopup(scoreValue, transform.position);
+
         StartCoroutine(DeactivateAfterDelay(0.1f));
     }
 
     private IEnumerator DeactivateAfterDelay(float delay)
     {
         // Hide mesh immediately
-        foreach (var renderer in GetComponentsInChildren<Renderer>())
-            renderer.enabled = false;
+        foreach (var r in GetComponentsInChildren<Renderer>())
+            r.enabled = false;
 
         yield return new WaitForSeconds(delay);
 
         _collected = false;
 
-        // Re-enable renderers for when this is reused from pool
-        foreach (var renderer in GetComponentsInChildren<Renderer>())
-            renderer.enabled = true;
+        // Re-enable renderers for pool reuse
+        foreach (var r in GetComponentsInChildren<Renderer>())
+            r.enabled = true;
 
         gameObject.SetActive(false);
     }
