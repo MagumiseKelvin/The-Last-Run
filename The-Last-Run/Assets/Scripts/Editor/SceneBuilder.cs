@@ -342,10 +342,25 @@ public class SceneBuilder : EditorWindow
         }
 
         // ── HUD ───────────────────────────────────────────────────────────────
-        // Score — top center, large — with punch animation
+        // ── Score panel — dark background pill, top center ───────────────────
+        var scoreBg = new GameObject("ScoreBackground");
+        scoreBg.transform.SetParent(canvasGO.transform, false);
+        var scoreBgImg = scoreBg.AddComponent<Image>();
+        scoreBgImg.color = new Color(0f, 0f, 0f, 0.55f);
+        var scoreBgRt = scoreBg.GetComponent<RectTransform>();
+        scoreBgRt.anchorMin = scoreBgRt.anchorMax = scoreBgRt.pivot = new Vector2(0.5f, 1f);
+        scoreBgRt.anchoredPosition = new Vector2(0f, -10f);
+        scoreBgRt.sizeDelta = new Vector2(220f, 90f);
+
+        // Score label (small)
+        var scoreLbl = MakeTMP(canvasGO, "ScoreLabel", "SCORE",
+            new Vector2(0.5f, 1f), new Vector2(0f, -18f), new Vector2(200f, 30f),
+            18, FontStyles.Normal, new Color(0.7f, 0.7f, 0.7f));
+
+        // Score value — large, bold, yellow
         var scoreTxt = MakeTMP(canvasGO, "ScoreText", "0",
-            new Vector2(0.5f, 1f), new Vector2(0f, -55f), new Vector2(300f, 70f),
-            60, FontStyles.Bold, Color.white);
+            new Vector2(0.5f, 1f), new Vector2(0f, -55f), new Vector2(200f, 65f),
+            58, FontStyles.Bold, new Color(1f, 0.92f, 0.3f));
         scoreTxt.gameObject.AddComponent<ScoreMultiplierDisplay>();
 
         // Distance — top left
@@ -358,10 +373,19 @@ public class SceneBuilder : EditorWindow
             new Vector2(1f, 1f), new Vector2(-110f, -50f), new Vector2(220f, 50f),
             26, FontStyles.Normal, new Color(0.8f, 0.8f, 0.8f));
 
-        // Coins — below distance
+        // Coins — below distance, gold colored with background
+        var coinBg = new GameObject("CoinBackground");
+        coinBg.transform.SetParent(canvasGO.transform, false);
+        var coinBgImg = coinBg.AddComponent<Image>();
+        coinBgImg.color = new Color(0.6f, 0.45f, 0f, 0.5f);
+        var coinBgRt = coinBg.GetComponent<RectTransform>();
+        coinBgRt.anchorMin = coinBgRt.anchorMax = coinBgRt.pivot = new Vector2(0f, 1f);
+        coinBgRt.anchoredPosition = new Vector2(15f, -90f);
+        coinBgRt.sizeDelta = new Vector2(160f, 38f);
+
         var coinTxt = MakeTMP(canvasGO, "CoinCountText", "Coins: 0",
-            new Vector2(0f, 1f), new Vector2(110f, -95f), new Vector2(200f, 45f),
-            26, FontStyles.Normal, new Color(1f, 0.85f, 0.2f));
+            new Vector2(0f, 1f), new Vector2(95f, -95f), new Vector2(160f, 38f),
+            24, FontStyles.Bold, new Color(1f, 0.88f, 0.2f));
 
         // Speed — bottom left
         var speedTxt = MakeTMP(canvasGO, "SpeedText", "8 m/s",

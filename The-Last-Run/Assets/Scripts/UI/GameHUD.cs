@@ -118,21 +118,22 @@ public class GameHUD : MonoBehaviour
     {
         if (GameManager.Instance == null || !GameManager.Instance.IsGameRunning) return;
 
-        // Distance
-        if (distanceText != null && ScoreManager.Instance != null)
-            distanceText.text = $"{ScoreManager.Instance.DistanceTraveled:F0}m";
-
-        // Coins
-        if (coinCountText != null && ScoreManager.Instance != null)
-            coinCountText.text = $"x{ScoreManager.Instance.CoinsCollected}";
+        // Poll all values every frame — reliable regardless of event timing
+        if (ScoreManager.Instance != null)
+        {
+            if (scoreText != null)
+                scoreText.text = $"{ScoreManager.Instance.CurrentScore:F0}";
+            if (distanceText != null)
+                distanceText.text = $"{ScoreManager.Instance.DistanceTraveled:F0}m";
+            if (coinCountText != null)
+                coinCountText.text = $"Coins: {ScoreManager.Instance.CoinsCollected}";
+            if (highScoreText != null)
+                highScoreText.text = $"Best: {ScoreManager.Instance.HighScore:F0}";
+        }
 
         // Speed
         if (speedText != null)
             speedText.text = $"{GameManager.Instance.GetCurrentSpeed():F0} m/s";
-
-        // High score live update
-        if (highScoreText != null && ScoreManager.Instance != null)
-            highScoreText.text = $"Best: {ScoreManager.Instance.HighScore:F0}";
 
         // Power-up timer fills
         UpdatePowerUpTimers();
