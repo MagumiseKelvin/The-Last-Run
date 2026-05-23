@@ -297,7 +297,7 @@ public class SceneBuilder : EditorWindow
         GameObject newBestObj = new GameObject("NewBestBanner");
         newBestObj.transform.SetParent(goPanel.transform, false);
         TextMeshProUGUI newBest = newBestObj.AddComponent<TextMeshProUGUI>();
-        newBest.text = "★ NEW BEST ★"; newBest.fontSize = 36; newBest.fontStyle = FontStyles.Bold;
+        newBest.text = "** NEW BEST **"; newBest.fontSize = 36; newBest.fontStyle = FontStyles.Bold;
         newBest.color = Color.yellow; newBest.alignment = TextAlignmentOptions.Center;
         var newBestRt = newBestObj.GetComponent<RectTransform>();
         newBestRt.anchorMin = new Vector2(0.5f,0.5f); newBestRt.anchorMax = new Vector2(0.5f,0.5f);
@@ -385,13 +385,38 @@ public class SceneBuilder : EditorWindow
         return go;
     }
 
+    private static Material _urpLit;
+
+    /// <summary>
+    /// Gets the correct URP Lit shader. Tries several known shader names for Unity 6.
+    /// Creates and saves a base material asset so it persists correctly.
+    /// </summary>
+    private static Material GetURPMaterial(Color color, string assetName)
+    {
+        EnsureFolder("Assets/Materials");
+        string path = $"Assets/Materials/{assetName}.mat";
+
+        // Try to find the right shader — Unity 6 URP uses different names
+        Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+        if (shader == null) shader = Shader.Find("Packages/com.unity.render-pipelines.universal/Shaders/Lit.shader");
+        if (shader == null) shader = Shader.Find("URP/Lit");
+        if (shader == null) shader = Shader.Find("Standard"); // absolute fallback
+
+        Material mat = new Material(shader);
+        mat.color = color;
+
+        // Save as asset so Unity doesn't lose the reference
+        AssetDatabase.CreateAsset(mat, path);
+        AssetDatabase.SaveAssets();
+        return mat;
+    }
+
     private static void SetColor(GameObject go, Color color)
     {
         var r = go.GetComponent<Renderer>();
         if (r == null) return;
-        var mat = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
-        mat.color = color;
-        r.material = mat;
+        string safeName = go.name.Replace(" ", "_").Replace("/", "_");
+        r.sharedMaterial = GetURPMaterial(color, safeName);
     }
 
     private static void EnsureFolder(string path)
