@@ -5,326 +5,444 @@ using TMPro;
 using System.IO;
 
 /// <summary>
-/// Editor tool that builds the entire Game scene automatically.
-/// Run it from the Unity menu: The Last Run → Build Game Scene
+/// Builds the entire Game scene from scratch with one click.
+/// Menu: The Last Run -> Build Game Scene
 /// </summary>
 public class SceneBuilder : EditorWindow
 {
+    // ── Entry Point ───────────────────────────────────────────────────────────
     [MenuItem("The Last Run/Build Game Scene")]
     public static void BuildScene()
     {
-        Debug.Log("[SceneBuilder] Starting scene build...");
+        Debug.Log("[SceneBuilder] Building scene...");
 
+        // Delete old prefabs so they get recreated fresh
+        DeleteAssetIfExists("Assets/Prefabs/TrackSegment_Straight.prefab");
+        DeleteAssetIfExists("Assets/Prefabs/Obstacle_Barrier.prefab");
+        DeleteAssetIfExists("Assets/Prefabs/Obstacle_LowBeam.prefab");
+        DeleteAssetIfExists("Assets/Prefabs/Coin.prefab");
+        AssetDatabase.Refresh();
+
+        // Wipe scene objects
         ClearScene();
 
-        // ── Managers ──────────────────────────────────────────────────────────
+        // Ensure folders
+        EnsureFolder("Assets/Prefabs");
+        EnsureFolder("Assets/Materials");
+
+        BuildManagers();
+        GameObject player = BuildPlayer();
+        BuildTrack();
+        BuildCamera(player);
+        BuildLighting();
+        BuildUI();
+
+        // Save scene
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(
+            UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene());
+        UnityEditor.SceneManagement.EditorSceneManager.SaveOpenScenes();
+
+        Debug.Log("[SceneBuilder] Done!");
+        EditorUtility.DisplayDialog("The Last Run",
+            "Scene built!\n\nPress Play to test.", "OK");
+    }
+
+    // ── Managers ──────────────────────────────────────────────────────────────
+    static void BuildManagers()
+    {
         CreateEmpty("GameManager").AddComponent<GameManager>();
         CreateEmpty("ScoreManager").AddComponent<ScoreManager>();
         CreateEmpty("PowerUpManager").AddComponent<PowerUpManager>();
 
-        GameObject obstacleSpawnerObj    = CreateEmpty("ObstacleSpawner");
-        GameObject collectibleSpawnerObj = CreateEmpty("CollectibleSpawner");
-        GameObject trackManagerObj       = CreateEmpty("TrackManager");
+        var obs = CreateEmpty("ObstacleSpawner");
+        var col = CreateEmpty("CollectibleSpawner");
+        var trk = CreateEmpty("TrackManager");
+        obs.AddComponent<ObstacleSpawner>();
+        col.AddComponent<CollectibleSpawner>();
+        trk.AddComponent<TrackManager>();
 
-        obstacleSpawnerObj.AddComponent<ObstacleSpawner>();
-        collectibleSpawnerObj.AddComponent<CollectibleSpawner>();
-        trackManagerObj.AddComponent<TrackManager>();
-
-        // AudioManager needs two AudioSources
-        GameObject audioManagerObj = CreateEmpty("AudioManager");
-        AudioManager am  = audioManagerObj.AddComponent<AudioManager>();
-        AudioSource music = audioManagerObj.AddComponent<AudioSource>();
-        AudioSource sfx   = audioManagerObj.AddComponent<AudioSource>();
-        music.loop = true; music.playOnAwake = false;
+        var am_go = CreateEmpty("AudioManager");
+        var am    = am_go.AddComponent<AudioManager>();
+        var mus   = am_go.AddComponent<AudioSource>();
+        var sfx   = am_go.AddComponent<AudioSource>();
+        mus.loop = true; mus.playOnAwake = false;
         sfx.playOnAwake = false;
-        am.musicSource = music;
+        am.musicSource = mus;
         am.sfxSource   = sfx;
+    }
 
-        // ── Ground ────────────────────────────────────────────────────────────
-        GameObject ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
-        ground.name = "Ground";
-        ground.transform.position   = new Vector3(0f, -0.15f, 50f);
-        ground.transform.localScale = new Vector3(5f, 1f, 100f);
-        SetColor(ground, new Color(0.08f, 0.08f, 0.10f)); // near-black dark slate
-
-        // ── Track Segment Prefab ──────────────────────────────────────────────
-        EnsureFolder("Assets/Prefabs");
-
-        GameObject trackSeg = new GameObject("TrackSegment_Straight");
-
-        // Road surface — dark asphalt
-        GameObject road = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        road.name = "Road";
-        road.transform.SetParent(trackSeg.transform, false);
-        road.transform.localScale    = new Vector3(7.5f, 0.2f, 30f);
-        road.transform.localPosition = Vector3.zero;
-        SetColor(road, new Color(0.12f, 0.12f, 0.14f));
-
-        // Lane dividers — two thin white strips
-        for (int i = 0; i < 2; i++)
-        {
-            GameObject divider = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            divider.name = $"LaneDivider_{i}";
-            divider.transform.SetParent(trackSeg.transform, false);
-            divider.transform.localScale    = new Vector3(0.08f, 0.21f, 30f);
-            divider.transform.localPosition = new Vector3((i == 0 ? -1.25f : 1.25f), 0f, 0f);
-            SetColor(divider, new Color(0.9f, 0.9f, 0.9f));
-            Object.DestroyImmediate(divider.GetComponent<BoxCollider>());
-        }
-
-        // Side walls — dark grey borders
-        for (int i = 0; i < 2; i++)
-        {
-            GameObject wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            wall.name = $"SideWall_{i}";
-            wall.transform.SetParent(trackSeg.transform, false);
-            wall.transform.localScale    = new Vector3(0.3f, 0.8f, 30f);
-            wall.transform.localPosition = new Vector3((i == 0 ? -3.9f : 3.9f), 0.3f, 0f);
-            SetColor(wall, new Color(0.18f, 0.18f, 0.22f));
-            Object.DestroyImmediate(wall.GetComponent<BoxCollider>());
-        }
-
-        trackSeg.AddComponent<TrackSegment>();
-
-        // Obstacle spawn points — one per lane
-        for (int i = 0; i < 3; i++)
-        {
-            GameObject sp = CreateEmpty($"ObstacleSpawn_{i + 1}", trackSeg.transform);
-            sp.transform.localPosition = new Vector3((i - 1) * 2.5f, 0.1f, (i % 3) * 6f - 6f);
-        }
-        // Coin spawn points
-        for (int i = 0; i < 3; i++)
-        {
-            GameObject cp = CreateEmpty($"CoinSpawn_{i + 1}", trackSeg.transform);
-            cp.transform.localPosition = new Vector3((i - 1) * 2.5f, 0.8f, i * 3f);
-        }
-
-        TrackSegment ts = trackSeg.GetComponent<TrackSegment>();
-        ts.obstacleSpawnPoints    = GetChildTransforms(trackSeg, "ObstacleSpawn");
-        ts.collectibleSpawnPoints = GetChildTransforms(trackSeg, "CoinSpawn");
-
-        string prefabPath = "Assets/Prefabs/TrackSegment_Straight.prefab";
-        GameObject trackPrefab = PrefabUtility.SaveAsPrefabAsset(trackSeg, prefabPath);
-        Object.DestroyImmediate(trackSeg);
-
-        trackManagerObj.GetComponent<TrackManager>().trackSegmentPrefabs = new GameObject[] { trackPrefab };
-
-        // ── Barrier Obstacle (full-height wall — must dodge left/right) ───────
-        GameObject barrierObj = new GameObject("Obstacle_Barrier");
-        // Main body
-        GameObject barrierBody = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        barrierBody.name = "Body";
-        barrierBody.transform.SetParent(barrierObj.transform, false);
-        barrierBody.transform.localScale    = new Vector3(2.2f, 1.6f, 0.35f);
-        barrierBody.transform.localPosition = new Vector3(0f, 0.8f, 0f);
-        SetColor(barrierBody, new Color(0.95f, 0.95f, 1.0f));  // bright white
-        // Warning stripes — orange accent bar
-        GameObject stripe = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        stripe.name = "Stripe";
-        stripe.transform.SetParent(barrierObj.transform, false);
-        stripe.transform.localScale    = new Vector3(2.2f, 0.18f, 0.36f);
-        stripe.transform.localPosition = new Vector3(0f, 1.3f, 0f);
-        SetColor(stripe, new Color(1f, 0.45f, 0f));  // orange
-        Object.DestroyImmediate(stripe.GetComponent<BoxCollider>());
-        // Trigger collider on root
-        BoxCollider barrierCol = barrierObj.AddComponent<BoxCollider>();
-        barrierCol.isTrigger = true;
-        barrierCol.center = new Vector3(0f, 0.8f, 0f);
-        barrierCol.size   = new Vector3(2.2f, 1.6f, 0.35f);
-        barrierObj.AddComponent<ObstacleBarrier>();
-        GameObject barrierPrefab = PrefabUtility.SaveAsPrefabAsset(barrierObj, "Assets/Prefabs/Obstacle_Barrier.prefab");
-        Object.DestroyImmediate(barrierObj);
-
-        // ── Low Beam Obstacle (must slide under) ──────────────────────────────
-        GameObject beamObj = new GameObject("Obstacle_LowBeam");
-        // Horizontal beam
-        GameObject beam = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        beam.name = "Beam";
-        beam.transform.SetParent(beamObj.transform, false);
-        beam.transform.localScale    = new Vector3(7.4f, 0.25f, 0.3f);
-        beam.transform.localPosition = new Vector3(0f, 1.1f, 0f);
-        SetColor(beam, new Color(1f, 0.2f, 0.2f));  // red beam
-        // Left post
-        GameObject postL = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        postL.name = "PostL";
-        postL.transform.SetParent(beamObj.transform, false);
-        postL.transform.localScale    = new Vector3(0.2f, 1.1f, 0.2f);
-        postL.transform.localPosition = new Vector3(-3.5f, 0.55f, 0f);
-        SetColor(postL, new Color(0.8f, 0.8f, 0.8f));
-        Object.DestroyImmediate(postL.GetComponent<BoxCollider>());
-        // Right post
-        GameObject postR = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        postR.name = "PostR";
-        postR.transform.SetParent(beamObj.transform, false);
-        postR.transform.localScale    = new Vector3(0.2f, 1.1f, 0.2f);
-        postR.transform.localPosition = new Vector3(3.5f, 0.55f, 0f);
-        SetColor(postR, new Color(0.8f, 0.8f, 0.8f));
-        Object.DestroyImmediate(postR.GetComponent<BoxCollider>());
-        // Trigger collider
-        BoxCollider beamCol = beamObj.AddComponent<BoxCollider>();
-        beamCol.isTrigger = true;
-        beamCol.center = new Vector3(0f, 1.1f, 0f);
-        beamCol.size   = new Vector3(7.4f, 0.25f, 0.3f);
-        beamObj.AddComponent<ObstacleLowBeam>();
-        GameObject beamPrefab = PrefabUtility.SaveAsPrefabAsset(beamObj, "Assets/Prefabs/Obstacle_LowBeam.prefab");
-        Object.DestroyImmediate(beamObj);
-
-        obstacleSpawnerObj.GetComponent<ObstacleSpawner>().obstaclePrefabs = new GameObject[] { barrierPrefab, beamPrefab };
-
-        // ── Coin Prefab — gold spinning disc ─────────────────────────────────
-        GameObject coinObj = new GameObject("Coin");
-        GameObject coinDisc = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-        coinDisc.name = "Disc";
-        coinDisc.transform.SetParent(coinObj.transform, false);
-        coinDisc.transform.localScale    = new Vector3(0.45f, 0.06f, 0.45f);
-        coinDisc.transform.localPosition = Vector3.zero;
-        SetColor(coinDisc, new Color(1f, 0.82f, 0f));  // gold
-        Object.DestroyImmediate(coinDisc.GetComponent<CapsuleCollider>());
-        // Trigger collider on root
-        SphereCollider coinCol = coinObj.AddComponent<SphereCollider>();
-        coinCol.isTrigger = true;
-        coinCol.radius = 0.35f;
-        Collectible coinScript = coinObj.AddComponent<Collectible>();
-        coinScript.scoreValue = 50;
-        coinScript.spin = true;
-        coinScript.spinSpeed = 200f;
-        GameObject coinPrefab = PrefabUtility.SaveAsPrefabAsset(coinObj, "Assets/Prefabs/Coin.prefab");
-        Object.DestroyImmediate(coinObj);
-        collectibleSpawnerObj.GetComponent<CollectibleSpawner>().coinPrefab = coinPrefab;
-
-        // ── Player ────────────────────────────────────────────────────────────
-        GameObject player = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+    // ── Player ────────────────────────────────────────────────────────────────
+    static GameObject BuildPlayer()
+    {
+        var player = GameObject.CreatePrimitive(PrimitiveType.Capsule);
         player.name = "Player";
+        player.tag  = "Player";
         player.transform.position = new Vector3(0f, 1f, 0f);
-        player.tag = "Player";
-        SetColor(player, new Color(0.2f, 0.6f, 1.0f));  // cool blue
+
+        // Blue material
+        ApplyMaterial(player, "Player", new Color(0.15f, 0.55f, 1f));
+
         Object.DestroyImmediate(player.GetComponent<CapsuleCollider>());
 
-        CharacterController cc = player.AddComponent<CharacterController>();
-        cc.height = 1.8f; cc.radius = 0.4f;
+        var cc    = player.AddComponent<CharacterController>();
+        cc.height = 1.8f;
+        cc.radius = 0.4f;
         cc.center = new Vector3(0f, 0.9f, 0f);
 
         player.AddComponent<PlayerController>();
         player.AddComponent<PlayerCollision>();
         player.AddComponent<PlayerAnimator>();
 
-        // Animator Controller
+        // Animator controller
         EnsureFolder("Assets/Animations");
-        string animPath = "Assets/Animations/PlayerAnimatorController.controller";
-        UnityEditor.Animations.AnimatorController animCtrl;
+        const string animPath = "Assets/Animations/PlayerAnimatorController.controller";
+        UnityEditor.Animations.AnimatorController ctrl;
         if (!File.Exists(Application.dataPath + "/Animations/PlayerAnimatorController.controller"))
         {
-            animCtrl = UnityEditor.Animations.AnimatorController.CreateAnimatorControllerAtPath(animPath);
-            animCtrl.AddParameter("IsRunning",  AnimatorControllerParameterType.Bool);
-            animCtrl.AddParameter("IsGrounded", AnimatorControllerParameterType.Bool);
-            animCtrl.AddParameter("IsSliding",  AnimatorControllerParameterType.Bool);
-            animCtrl.AddParameter("Jump",       AnimatorControllerParameterType.Trigger);
-            animCtrl.AddParameter("Lean",       AnimatorControllerParameterType.Float);
-            animCtrl.AddParameter("Death",      AnimatorControllerParameterType.Trigger);
+            ctrl = UnityEditor.Animations.AnimatorController
+                       .CreateAnimatorControllerAtPath(animPath);
+            ctrl.AddParameter("IsRunning",  AnimatorControllerParameterType.Bool);
+            ctrl.AddParameter("IsGrounded", AnimatorControllerParameterType.Bool);
+            ctrl.AddParameter("IsSliding",  AnimatorControllerParameterType.Bool);
+            ctrl.AddParameter("Jump",       AnimatorControllerParameterType.Trigger);
+            ctrl.AddParameter("Lean",       AnimatorControllerParameterType.Float);
+            ctrl.AddParameter("Death",      AnimatorControllerParameterType.Trigger);
         }
         else
         {
-            animCtrl = AssetDatabase.LoadAssetAtPath<UnityEditor.Animations.AnimatorController>(animPath);
+            ctrl = AssetDatabase.LoadAssetAtPath
+                       <UnityEditor.Animations.AnimatorController>(animPath);
         }
-        Animator anim = player.GetComponent<Animator>();
-        if (anim == null) anim = player.AddComponent<Animator>();
-        anim.runtimeAnimatorController = animCtrl;
 
-        // ── Camera ────────────────────────────────────────────────────────────
-        GameObject camObj = GameObject.FindWithTag("MainCamera");
-        if (camObj == null) { camObj = new GameObject("Main Camera"); camObj.AddComponent<Camera>(); camObj.tag = "MainCamera"; }
-        camObj.transform.position = new Vector3(0f, 4f, -6f);
-        camObj.transform.rotation = Quaternion.Euler(15f, 0f, 0f);
-        CameraFollow cf = camObj.GetComponent<CameraFollow>() ?? camObj.AddComponent<CameraFollow>();
-        cf.target = player.transform;
-        cf.offset = new Vector3(0f, 3f, -6f);
+        var anim = player.GetComponent<Animator>()
+                   ?? player.AddComponent<Animator>();
+        anim.runtimeAnimatorController = ctrl;
 
-        // ── Light ─────────────────────────────────────────────────────────────
-        GameObject lightObj = GameObject.Find("Directional Light");
-        if (lightObj == null) { lightObj = new GameObject("Directional Light"); lightObj.AddComponent<Light>().type = LightType.Directional; }
-        lightObj.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
-        lightObj.GetComponent<Light>().intensity = 1.2f;
-
-        // ── UI ────────────────────────────────────────────────────────────────
-        BuildUI(player);
-
-        // ── Save ──────────────────────────────────────────────────────────────
-        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(
-            UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene());
-        UnityEditor.SceneManagement.EditorSceneManager.SaveOpenScenes();
-
-        Debug.Log("[SceneBuilder] Scene built successfully!");
-        EditorUtility.DisplayDialog("The Last Run", "Scene built successfully!\n\nPress Play to test.", "OK");
+        return player;
     }
 
-    // ── UI Builder ────────────────────────────────────────────────────────────
-
-    private static void BuildUI(GameObject player)
+    // ── Track ─────────────────────────────────────────────────────────────────
+    static void BuildTrack()
     {
-        GameObject oldCanvas = GameObject.Find("Canvas");
-        if (oldCanvas != null) Object.DestroyImmediate(oldCanvas);
+        // ── Ground plane (wide, dark) ─────────────────────────────────────────
+        var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
+        ground.name = "Ground";
+        ground.transform.position   = new Vector3(0f, -0.11f, 50f);
+        ground.transform.localScale = new Vector3(6f, 1f, 120f);
+        ApplyMaterial(ground, "Ground", new Color(0.06f, 0.06f, 0.08f));
 
-        GameObject canvasObj = new GameObject("Canvas");
-        Canvas canvas = canvasObj.AddComponent<Canvas>();
+        // ── Track segment prefab ──────────────────────────────────────────────
+        var seg = new GameObject("TrackSegment_Straight");
+
+        // Road surface
+        var road = MakeCube("Road", seg.transform,
+            new Vector3(7.5f, 0.2f, 30f), Vector3.zero,
+            new Color(0.13f, 0.13f, 0.16f));
+        Object.DestroyImmediate(road.GetComponent<BoxCollider>());
+        // Re-add single collider for the road so player walks on it
+        var roadCol = road.AddComponent<BoxCollider>();
+
+        // Lane dividers (white dashes)
+        for (int i = 0; i < 2; i++)
+        {
+            float x = (i == 0) ? -1.25f : 1.25f;
+            var div = MakeCube($"Divider_{i}", seg.transform,
+                new Vector3(0.07f, 0.21f, 30f), new Vector3(x, 0f, 0f),
+                new Color(0.85f, 0.85f, 0.85f));
+            Object.DestroyImmediate(div.GetComponent<BoxCollider>());
+        }
+
+        // Side kerbs (bright accent — cyan/teal)
+        for (int i = 0; i < 2; i++)
+        {
+            float x = (i == 0) ? -3.85f : 3.85f;
+            var kerb = MakeCube($"Kerb_{i}", seg.transform,
+                new Vector3(0.25f, 0.3f, 30f), new Vector3(x, 0.05f, 0f),
+                new Color(0.0f, 0.75f, 0.85f));
+            Object.DestroyImmediate(kerb.GetComponent<BoxCollider>());
+        }
+
+        // Obstacle spawn points — staggered per lane at ground level
+        for (int i = 0; i < 3; i++)
+        {
+            var sp = CreateEmpty($"ObstacleSpawn_{i + 1}", seg.transform);
+            sp.transform.localPosition = new Vector3((i - 1) * 2.5f, 0.1f, 5f + i * 4f);
+        }
+
+        // Coin spawn points — at player chest height (0.8f), reachable by running
+        for (int i = 0; i < 3; i++)
+        {
+            var cp = CreateEmpty($"CoinSpawn_{i + 1}", seg.transform);
+            cp.transform.localPosition = new Vector3((i - 1) * 2.5f, 0.75f, 3f + i * 3f);
+        }
+
+        var ts = seg.AddComponent<TrackSegment>();
+        ts.obstacleSpawnPoints    = GetChildTransforms(seg, "ObstacleSpawn");
+        ts.collectibleSpawnPoints = GetChildTransforms(seg, "CoinSpawn");
+
+        var trackPrefab = PrefabUtility.SaveAsPrefabAsset(seg, "Assets/Prefabs/TrackSegment_Straight.prefab");
+        Object.DestroyImmediate(seg);
+
+        // ── Barrier obstacle (white wall — dodge left/right) ──────────────────
+        var barrier = new GameObject("Obstacle_Barrier");
+
+        var bBody = MakeCube("Body", barrier.transform,
+            new Vector3(2.2f, 1.5f, 0.3f), new Vector3(0f, 0.75f, 0f),
+            new Color(0.92f, 0.92f, 0.95f));
+        Object.DestroyImmediate(bBody.GetComponent<BoxCollider>());
+
+        var bStripe = MakeCube("Stripe", barrier.transform,
+            new Vector3(2.2f, 0.2f, 0.31f), new Vector3(0f, 1.2f, 0f),
+            new Color(1f, 0.42f, 0f));
+        Object.DestroyImmediate(bStripe.GetComponent<BoxCollider>());
+
+        var bStripe2 = MakeCube("Stripe2", barrier.transform,
+            new Vector3(2.2f, 0.2f, 0.31f), new Vector3(0f, 0.35f, 0f),
+            new Color(1f, 0.42f, 0f));
+        Object.DestroyImmediate(bStripe2.GetComponent<BoxCollider>());
+
+        var bCol = barrier.AddComponent<BoxCollider>();
+        bCol.isTrigger = true;
+        bCol.center    = new Vector3(0f, 0.75f, 0f);
+        bCol.size      = new Vector3(2.2f, 1.5f, 0.3f);
+        barrier.AddComponent<ObstacleBarrier>();
+        var barrierPrefab = PrefabUtility.SaveAsPrefabAsset(barrier, "Assets/Prefabs/Obstacle_Barrier.prefab");
+        Object.DestroyImmediate(barrier);
+
+        // ── Low beam obstacle (red bar — must slide under) ────────────────────
+        var beam = new GameObject("Obstacle_LowBeam");
+
+        var bBar = MakeCube("Bar", beam.transform,
+            new Vector3(7.3f, 0.22f, 0.28f), new Vector3(0f, 1.05f, 0f),
+            new Color(0.95f, 0.15f, 0.15f));
+        Object.DestroyImmediate(bBar.GetComponent<BoxCollider>());
+
+        for (int i = 0; i < 2; i++)
+        {
+            float x = (i == 0) ? -3.4f : 3.4f;
+            var post = MakeCube($"Post_{i}", beam.transform,
+                new Vector3(0.18f, 1.05f, 0.18f), new Vector3(x, 0.525f, 0f),
+                new Color(0.75f, 0.75f, 0.75f));
+            Object.DestroyImmediate(post.GetComponent<BoxCollider>());
+        }
+
+        var beamCol = beam.AddComponent<BoxCollider>();
+        beamCol.isTrigger = true;
+        beamCol.center    = new Vector3(0f, 1.05f, 0f);
+        beamCol.size      = new Vector3(7.3f, 0.22f, 0.28f);
+        beam.AddComponent<ObstacleLowBeam>();
+        var beamPrefab = PrefabUtility.SaveAsPrefabAsset(beam, "Assets/Prefabs/Obstacle_LowBeam.prefab");
+        Object.DestroyImmediate(beam);
+
+        // ── Coin prefab (gold disc, spins) ────────────────────────────────────
+        var coin = new GameObject("Coin");
+
+        var disc = MakeCylinder("Disc", coin.transform,
+            new Vector3(0.42f, 0.055f, 0.42f), Vector3.zero,
+            new Color(1f, 0.80f, 0f));
+        Object.DestroyImmediate(disc.GetComponent<CapsuleCollider>());
+
+        // Inner ring (slightly darker gold)
+        var inner = MakeCylinder("Inner", coin.transform,
+            new Vector3(0.25f, 0.06f, 0.25f), Vector3.zero,
+            new Color(0.85f, 0.62f, 0f));
+        Object.DestroyImmediate(inner.GetComponent<CapsuleCollider>());
+
+        var coinCol = coin.AddComponent<SphereCollider>();
+        coinCol.isTrigger = true;
+        coinCol.radius    = 0.32f;
+
+        var coinScript       = coin.AddComponent<Collectible>();
+        coinScript.scoreValue = 50;
+        coinScript.spin       = true;
+        coinScript.spinSpeed  = 180f;
+
+        var coinPrefab = PrefabUtility.SaveAsPrefabAsset(coin, "Assets/Prefabs/Coin.prefab");
+        Object.DestroyImmediate(coin);
+
+        // ── Wire spawners ─────────────────────────────────────────────────────
+        var tm = GameObject.Find("TrackManager").GetComponent<TrackManager>();
+        tm.trackSegmentPrefabs = new GameObject[] { trackPrefab };
+
+        var os = GameObject.Find("ObstacleSpawner").GetComponent<ObstacleSpawner>();
+        os.obstaclePrefabs = new GameObject[] { barrierPrefab, beamPrefab };
+
+        var cs = GameObject.Find("CollectibleSpawner").GetComponent<CollectibleSpawner>();
+        cs.coinPrefab = coinPrefab;
+    }
+
+    // ── Camera ────────────────────────────────────────────────────────────────
+    static void BuildCamera(GameObject player)
+    {
+        var cam = GameObject.FindWithTag("MainCamera");
+        if (cam == null)
+        {
+            cam = new GameObject("Main Camera");
+            cam.AddComponent<Camera>();
+            cam.tag = "MainCamera";
+        }
+        cam.transform.position = new Vector3(0f, 4.5f, -7f);
+        cam.transform.rotation = Quaternion.Euler(14f, 0f, 0f);
+
+        var cf    = cam.GetComponent<CameraFollow>() ?? cam.AddComponent<CameraFollow>();
+        cf.target = player.transform;
+        cf.offset = new Vector3(0f, 3.5f, -7f);
+    }
+
+    // ── Lighting ──────────────────────────────────────────────────────────────
+    static void BuildLighting()
+    {
+        var lo = GameObject.Find("Directional Light");
+        if (lo == null)
+        {
+            lo = new GameObject("Directional Light");
+            lo.AddComponent<Light>().type = LightType.Directional;
+        }
+        lo.transform.rotation = Quaternion.Euler(48f, -28f, 0f);
+        var l = lo.GetComponent<Light>();
+        l.intensity = 1.1f;
+        l.color     = new Color(1f, 0.95f, 0.88f);
+    }
+
+    // ── UI ────────────────────────────────────────────────────────────────────
+    static void BuildUI()
+    {
+        // Remove old canvas completely
+        var old = GameObject.Find("Canvas");
+        if (old != null) Object.DestroyImmediate(old);
+
+        var canvasGO = new GameObject("Canvas");
+        var canvas   = canvasGO.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        CanvasScaler scaler = canvasObj.AddComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920, 1080);
-        canvasObj.AddComponent<GraphicRaycaster>();
 
+        var scaler = canvasGO.AddComponent<CanvasScaler>();
+        scaler.uiScaleMode         = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920f, 1080f);
+        scaler.matchWidthOrHeight  = 0.5f;
+        canvasGO.AddComponent<GraphicRaycaster>();
+
+        // EventSystem
         if (Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
         {
-            GameObject es = new GameObject("EventSystem");
+            var es = new GameObject("EventSystem");
             es.AddComponent<UnityEngine.EventSystems.EventSystem>();
             es.AddComponent<UnityEngine.EventSystems.StandaloneInputModule>();
         }
 
-        // HUD texts
-        TextMeshProUGUI scoreTxt  = CreateTMPText(canvasObj, "ScoreText",     "0",       new Vector2(0.5f,1f), new Vector2(0f,-60f),   56, FontStyles.Bold);
-        TextMeshProUGUI distTxt   = CreateTMPText(canvasObj, "DistanceText",  "0m",      new Vector2(0f,1f),   new Vector2(120f,-55f),  32, FontStyles.Normal);
-        TextMeshProUGUI highTxt   = CreateTMPText(canvasObj, "HighScoreText", "Best: 0", new Vector2(1f,1f),   new Vector2(-120f,-55f), 28, FontStyles.Normal);
-        TextMeshProUGUI coinTxt   = CreateTMPText(canvasObj, "CoinCountText", "x0",      new Vector2(0f,1f),   new Vector2(120f,-95f),  28, FontStyles.Normal);
-        TextMeshProUGUI speedTxt  = CreateTMPText(canvasObj, "SpeedText",     "8 m/s",   new Vector2(0f,0f),   new Vector2(120f,60f),   24, FontStyles.Normal);
+        // ── HUD ───────────────────────────────────────────────────────────────
+        // Score — top center, large
+        var scoreTxt = MakeTMP(canvasGO, "ScoreText", "0",
+            new Vector2(0.5f, 1f), new Vector2(0f, -55f), new Vector2(300f, 70f),
+            60, FontStyles.Bold, Color.white);
 
-        // Game Over Panel
-        GameObject goPanel = CreatePanel(canvasObj, "GameOverPanel", new Color(0f,0f,0f,0.88f), Vector2.zero, new Vector2(620f,520f));
+        // Distance — top left
+        var distTxt = MakeTMP(canvasGO, "DistanceText", "0m",
+            new Vector2(0f, 1f), new Vector2(110f, -50f), new Vector2(200f, 50f),
+            30, FontStyles.Normal, new Color(0.8f, 0.8f, 0.8f));
+
+        // Best — top right
+        var highTxt = MakeTMP(canvasGO, "HighScoreText", "Best: 0",
+            new Vector2(1f, 1f), new Vector2(-110f, -50f), new Vector2(220f, 50f),
+            26, FontStyles.Normal, new Color(0.8f, 0.8f, 0.8f));
+
+        // Coins — below distance
+        var coinTxt = MakeTMP(canvasGO, "CoinCountText", "Coins: 0",
+            new Vector2(0f, 1f), new Vector2(110f, -95f), new Vector2(200f, 45f),
+            26, FontStyles.Normal, new Color(1f, 0.85f, 0.2f));
+
+        // Speed — bottom left
+        var speedTxt = MakeTMP(canvasGO, "SpeedText", "8 m/s",
+            new Vector2(0f, 0f), new Vector2(110f, 55f), new Vector2(180f, 40f),
+            22, FontStyles.Normal, new Color(0.6f, 0.6f, 0.6f));
+
+        // ── Pause button — top right corner ───────────────────────────────────
+        // Use plain ASCII "II" — no special characters
+        var pauseBtn = MakeButton(canvasGO, "PauseButton", "II",
+            new Vector2(1f, 1f), new Vector2(-55f, -55f), new Vector2(65f, 65f),
+            new Color(0.1f, 0.1f, 0.1f, 0.75f), 28);
+
+        // ── Game Over Panel ───────────────────────────────────────────────────
+        var goPanel = MakePanel(canvasGO, "GameOverPanel",
+            new Color(0.04f, 0.04f, 0.06f, 0.94f),
+            Vector2.zero, new Vector2(640f, 540f));
         goPanel.SetActive(false);
-        CreateTMPText(goPanel, "GameOverTitle",     "GAME OVER", new Vector2(0.5f,1f),   new Vector2(0f,-55f),  64, FontStyles.Bold,   Color.white);
-        TextMeshProUGUI goScore = CreateTMPText(goPanel, "GameOverScoreText",     "0",       new Vector2(0.5f,0.5f), new Vector2(0f,90f),   72, FontStyles.Bold,   Color.yellow);
-        TextMeshProUGUI goHigh  = CreateTMPText(goPanel, "GameOverHighScoreText", "Best: 0", new Vector2(0.5f,0.5f), new Vector2(0f,25f),   32, FontStyles.Normal, Color.white);
-        TextMeshProUGUI goDist  = CreateTMPText(goPanel, "GameOverDistanceText",  "0m",      new Vector2(0.5f,0.5f), new Vector2(0f,-15f),  28, FontStyles.Normal, Color.white);
-        TextMeshProUGUI goCoins = CreateTMPText(goPanel, "GameOverCoinsText",     "x0",      new Vector2(0.5f,0.5f), new Vector2(0f,-50f),  28, FontStyles.Normal, Color.yellow);
-        GameObject newBestObj = new GameObject("NewBestBanner");
-        newBestObj.transform.SetParent(goPanel.transform, false);
-        TextMeshProUGUI newBest = newBestObj.AddComponent<TextMeshProUGUI>();
-        newBest.text = "** NEW BEST **"; newBest.fontSize = 36; newBest.fontStyle = FontStyles.Bold;
-        newBest.color = Color.yellow; newBest.alignment = TextAlignmentOptions.Center;
-        var newBestRt = newBestObj.GetComponent<RectTransform>();
-        newBestRt.anchorMin = new Vector2(0.5f,0.5f); newBestRt.anchorMax = new Vector2(0.5f,0.5f);
-        newBestRt.pivot = new Vector2(0.5f,0.5f);
-        newBestRt.anchoredPosition = new Vector2(0f,145f); newBestRt.sizeDelta = new Vector2(320f,65f);
-        newBestObj.SetActive(false);
-        GameObject restartBtn = CreateButton(goPanel, "RestartButton", "PLAY AGAIN", new Vector2(0.5f,0f), new Vector2(-110f,60f), new Vector2(200f,55f), new Color(0.1f,0.7f,0.2f));
-        GameObject menuBtn    = CreateButton(goPanel, "MenuButton",    "MAIN MENU",  new Vector2(0.5f,0f), new Vector2(110f,60f),  new Vector2(200f,55f), new Color(0.2f,0.4f,0.8f));
 
-        // Pause button
-        GameObject pauseBtn = CreateButton(canvasObj, "PauseButton", "II", new Vector2(1f,1f), new Vector2(-50f,-50f), new Vector2(60f,60f), new Color(0.15f,0.15f,0.15f,0.8f));
+        MakeTMP(goPanel, "GOTitle", "GAME OVER",
+            new Vector2(0.5f, 1f), new Vector2(0f, -55f), new Vector2(500f, 75f),
+            62, FontStyles.Bold, new Color(1f, 0.35f, 0.35f));
 
-        // Pause Panel
-        GameObject pausePanel = CreatePanel(canvasObj, "PausePanel", new Color(0f,0f,0f,0.92f), Vector2.zero, new Vector2(420f,420f));
+        var goScore = MakeTMP(goPanel, "GameOverScoreText", "0",
+            new Vector2(0.5f, 0.5f), new Vector2(0f, 100f), new Vector2(400f, 80f),
+            76, FontStyles.Bold, Color.white);
+
+        var goHigh = MakeTMP(goPanel, "GameOverHighScoreText", "Best: 0",
+            new Vector2(0.5f, 0.5f), new Vector2(0f, 30f), new Vector2(400f, 50f),
+            30, FontStyles.Normal, new Color(0.7f, 0.7f, 0.7f));
+
+        var goDist = MakeTMP(goPanel, "GameOverDistanceText", "0m",
+            new Vector2(0.5f, 0.5f), new Vector2(0f, -15f), new Vector2(400f, 45f),
+            28, FontStyles.Normal, new Color(0.7f, 0.7f, 0.7f));
+
+        var goCoins = MakeTMP(goPanel, "GameOverCoinsText", "Coins: 0",
+            new Vector2(0.5f, 0.5f), new Vector2(0f, -55f), new Vector2(400f, 45f),
+            28, FontStyles.Normal, new Color(1f, 0.85f, 0.2f));
+
+        // New best banner — plain text, no special chars
+        var newBestGO  = new GameObject("NewBestBanner");
+        newBestGO.transform.SetParent(goPanel.transform, false);
+        var newBestTMP = newBestGO.AddComponent<TextMeshProUGUI>();
+        newBestTMP.text      = "NEW BEST!";
+        newBestTMP.fontSize  = 38;
+        newBestTMP.fontStyle = FontStyles.Bold;
+        newBestTMP.color     = new Color(1f, 0.85f, 0.1f);
+        newBestTMP.alignment = TextAlignmentOptions.Center;
+        var nbRT = newBestGO.GetComponent<RectTransform>();
+        nbRT.anchorMin = nbRT.anchorMax = nbRT.pivot = new Vector2(0.5f, 0.5f);
+        nbRT.anchoredPosition = new Vector2(0f, 155f);
+        nbRT.sizeDelta        = new Vector2(340f, 60f);
+        newBestGO.SetActive(false);
+
+        var restartBtn = MakeButton(goPanel, "RestartButton", "PLAY AGAIN",
+            new Vector2(0.5f, 0f), new Vector2(-115f, 65f), new Vector2(210f, 58f),
+            new Color(0.08f, 0.65f, 0.18f), 22);
+
+        var menuBtn = MakeButton(goPanel, "MenuButton", "MAIN MENU",
+            new Vector2(0.5f, 0f), new Vector2(115f, 65f), new Vector2(210f, 58f),
+            new Color(0.15f, 0.35f, 0.75f), 22);
+
+        // ── Pause Panel ───────────────────────────────────────────────────────
+        var pausePanel = MakePanel(canvasGO, "PausePanel",
+            new Color(0.04f, 0.04f, 0.06f, 0.95f),
+            Vector2.zero, new Vector2(440f, 440f));
         pausePanel.SetActive(false);
-        CreateTMPText(pausePanel, "PauseTitle", "PAUSED", new Vector2(0.5f,1f), new Vector2(0f,-55f), 52, FontStyles.Bold, Color.white);
-        GameObject resumeBtn       = CreateButton(pausePanel, "ResumeButton",       "RESUME",    new Vector2(0.5f,0.5f), new Vector2(0f,70f),  new Vector2(220f,55f), new Color(0.1f,0.7f,0.2f));
-        GameObject pauseRestartBtn = CreateButton(pausePanel, "PauseRestartButton", "RESTART",   new Vector2(0.5f,0.5f), new Vector2(0f,0f),   new Vector2(220f,55f), new Color(0.8f,0.5f,0.1f));
-        GameObject pauseMenuBtn    = CreateButton(pausePanel, "PauseMenuButton",    "MAIN MENU", new Vector2(0.5f,0.5f), new Vector2(0f,-70f), new Vector2(220f,55f), new Color(0.2f,0.4f,0.8f));
 
-        // Countdown Panel
-        GameObject countPanel = CreatePanel(canvasObj, "CountdownPanel", new Color(0f,0f,0f,0f), Vector2.zero, new Vector2(300f,200f));
+        MakeTMP(pausePanel, "PauseTitle", "PAUSED",
+            new Vector2(0.5f, 1f), new Vector2(0f, -55f), new Vector2(340f, 65f),
+            52, FontStyles.Bold, Color.white);
+
+        var resumeBtn  = MakeButton(pausePanel, "ResumeButton", "RESUME",
+            new Vector2(0.5f, 0.5f), new Vector2(0f, 75f), new Vector2(230f, 58f),
+            new Color(0.08f, 0.65f, 0.18f), 22);
+
+        var pRestartBtn = MakeButton(pausePanel, "PauseRestartButton", "RESTART",
+            new Vector2(0.5f, 0.5f), new Vector2(0f, 0f), new Vector2(230f, 58f),
+            new Color(0.75f, 0.45f, 0.08f), 22);
+
+        var pMenuBtn = MakeButton(pausePanel, "PauseMenuButton", "MAIN MENU",
+            new Vector2(0.5f, 0.5f), new Vector2(0f, -75f), new Vector2(230f, 58f),
+            new Color(0.15f, 0.35f, 0.75f), 22);
+
+        // ── Countdown Panel ───────────────────────────────────────────────────
+        var countPanel = MakePanel(canvasGO, "CountdownPanel",
+            new Color(0f, 0f, 0f, 0f), Vector2.zero, new Vector2(300f, 220f));
         countPanel.SetActive(false);
-        TextMeshProUGUI countTxt = CreateTMPText(countPanel, "CountdownText", "3", new Vector2(0.5f,0.5f), Vector2.zero, 120, FontStyles.Bold, Color.white);
 
-        // Wire GameHUD
-        GameHUD hud = canvasObj.GetComponent<GameHUD>() ?? canvasObj.AddComponent<GameHUD>();
+        var countTxt = MakeTMP(countPanel, "CountdownText", "3",
+            new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(280f, 200f),
+            130, FontStyles.Bold, Color.white);
+
+        // ── Wire GameHUD ──────────────────────────────────────────────────────
+        var hud = canvasGO.GetComponent<GameHUD>() ?? canvasGO.AddComponent<GameHUD>();
         hud.scoreText             = scoreTxt;
         hud.highScoreText         = highTxt;
         hud.distanceText          = distTxt;
@@ -335,91 +453,58 @@ public class SceneBuilder : EditorWindow
         hud.gameOverHighScoreText = goHigh;
         hud.gameOverDistanceText  = goDist;
         hud.gameOverCoinsText     = goCoins;
-        hud.newHighScoreBanner    = newBest;
+        hud.newHighScoreBanner    = newBestTMP;
         hud.restartButton         = restartBtn.GetComponent<Button>();
         hud.menuButton            = menuBtn.GetComponent<Button>();
         hud.pauseButton           = pauseBtn.GetComponent<Button>();
         hud.resumeButton          = resumeBtn.GetComponent<Button>();
-        hud.pauseRestartButton    = pauseRestartBtn.GetComponent<Button>();
-        hud.pauseMenuButton       = pauseMenuBtn.GetComponent<Button>();
+        hud.pauseRestartButton    = pRestartBtn.GetComponent<Button>();
+        hud.pauseMenuButton       = pMenuBtn.GetComponent<Button>();
         hud.pausePanel            = pausePanel;
         hud.countdownPanel        = countPanel;
         hud.countdownText         = countTxt;
 
-        // Wire GameOverUI
-        GameOverUI goUI = goPanel.GetComponent<GameOverUI>() ?? goPanel.AddComponent<GameOverUI>();
+        // ── Wire GameOverUI ───────────────────────────────────────────────────
+        var goUI = goPanel.GetComponent<GameOverUI>() ?? goPanel.AddComponent<GameOverUI>();
         goUI.finalScoreText  = goScore;
         goUI.highScoreText   = goHigh;
         goUI.distanceText    = goDist;
         goUI.coinsText       = goCoins;
-        goUI.newBestBanner   = newBestObj;
+        goUI.newBestBanner   = newBestGO;
         goUI.restartButton   = restartBtn.GetComponent<Button>();
         goUI.mainMenuButton  = menuBtn.GetComponent<Button>();
 
-        // ScorePopupSpawner
-        GameObject popupObj = CreateEmpty("ScorePopupSpawner", canvasObj.transform);
-        ScorePopupSpawner sps = popupObj.AddComponent<ScorePopupSpawner>();
+        // ── ScorePopupSpawner ─────────────────────────────────────────────────
+        var popupGO = CreateEmpty("ScorePopupSpawner", canvasGO.transform);
+        var sps     = popupGO.AddComponent<ScorePopupSpawner>();
         sps.hudCanvas  = canvas;
         sps.mainCamera = Camera.main;
-
-        Debug.Log("[SceneBuilder] UI built and wired.");
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static void ClearScene()
+    static void ClearScene()
     {
         string[] keep = { "Main Camera", "Directional Light" };
+        // Collect first, then destroy — avoids modifying collection during iteration
+        var toDestroy = new System.Collections.Generic.List<GameObject>();
         foreach (var go in Object.FindObjectsByType<GameObject>())
         {
             if (go.transform.parent != null) continue;
             if (System.Array.Exists(keep, n => go.name == n)) continue;
-            Object.DestroyImmediate(go);
+            toDestroy.Add(go);
         }
+        foreach (var go in toDestroy)
+            if (go != null) Object.DestroyImmediate(go);
     }
 
-    private static GameObject CreateEmpty(string name, Transform parent = null)
+    static void DeleteAssetIfExists(string path)
     {
-        var go = new GameObject(name);
-        if (parent != null) go.transform.SetParent(parent, false);
-        return go;
+        if (AssetDatabase.LoadAssetAtPath<Object>(path) != null)
+            AssetDatabase.DeleteAsset(path);
     }
 
-    private static Material _urpLit;
-
-    /// <summary>
-    /// Gets the correct URP Lit shader. Tries several known shader names for Unity 6.
-    /// Creates and saves a base material asset so it persists correctly.
-    /// </summary>
-    private static Material GetURPMaterial(Color color, string assetName)
-    {
-        EnsureFolder("Assets/Materials");
-        string path = $"Assets/Materials/{assetName}.mat";
-
-        // Try to find the right shader — Unity 6 URP uses different names
-        Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-        if (shader == null) shader = Shader.Find("Packages/com.unity.render-pipelines.universal/Shaders/Lit.shader");
-        if (shader == null) shader = Shader.Find("URP/Lit");
-        if (shader == null) shader = Shader.Find("Standard"); // absolute fallback
-
-        Material mat = new Material(shader);
-        mat.color = color;
-
-        // Save as asset so Unity doesn't lose the reference
-        AssetDatabase.CreateAsset(mat, path);
-        AssetDatabase.SaveAssets();
-        return mat;
-    }
-
-    private static void SetColor(GameObject go, Color color)
-    {
-        var r = go.GetComponent<Renderer>();
-        if (r == null) return;
-        string safeName = go.name.Replace(" ", "_").Replace("/", "_");
-        r.sharedMaterial = GetURPMaterial(color, safeName);
-    }
-
-    private static void EnsureFolder(string path)
+    static void EnsureFolder(string path)
     {
         if (!AssetDatabase.IsValidFolder(path))
         {
@@ -429,66 +514,137 @@ public class SceneBuilder : EditorWindow
         }
     }
 
-    private static Transform[] GetChildTransforms(GameObject parent, string nameContains)
+    static GameObject CreateEmpty(string name, Transform parent = null)
+    {
+        var go = new GameObject(name);
+        if (parent != null) go.transform.SetParent(parent, false);
+        return go;
+    }
+
+    /// <summary>
+    /// Creates a material saved as an asset so URP doesn't lose the shader reference.
+    /// Tries URP Lit first, falls back to Standard.
+    /// </summary>
+    static void ApplyMaterial(GameObject go, string matName, Color color)
+    {
+        var r = go.GetComponent<Renderer>();
+        if (r == null) return;
+
+        string path = $"Assets/Materials/TLR_{matName}.mat";
+
+        // Delete old version so we always get a fresh one
+        if (AssetDatabase.LoadAssetAtPath<Material>(path) != null)
+            AssetDatabase.DeleteAsset(path);
+
+        // Try URP shaders in order
+        Shader sh = Shader.Find("Universal Render Pipeline/Lit");
+        if (sh == null) sh = Shader.Find("Universal Render Pipeline/Simple Lit");
+        if (sh == null) sh = Shader.Find("Standard");
+
+        var mat   = new Material(sh);
+        mat.color = color;
+
+        // For URP Lit, also set the base map color
+        if (mat.HasProperty("_BaseColor"))
+            mat.SetColor("_BaseColor", color);
+
+        AssetDatabase.CreateAsset(mat, path);
+        r.sharedMaterial = mat;
+    }
+
+    static GameObject MakeCube(string name, Transform parent,
+        Vector3 scale, Vector3 localPos, Color color)
+    {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        go.name = name;
+        go.transform.SetParent(parent, false);
+        go.transform.localScale    = scale;
+        go.transform.localPosition = localPos;
+        ApplyMaterial(go, name, color);
+        return go;
+    }
+
+    static GameObject MakeCylinder(string name, Transform parent,
+        Vector3 scale, Vector3 localPos, Color color)
+    {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        go.name = name;
+        go.transform.SetParent(parent, false);
+        go.transform.localScale    = scale;
+        go.transform.localPosition = localPos;
+        ApplyMaterial(go, name, color);
+        return go;
+    }
+
+    static Transform[] GetChildTransforms(GameObject parent, string contains)
     {
         var list = new System.Collections.Generic.List<Transform>();
-        foreach (Transform child in parent.transform)
-            if (child.name.Contains(nameContains)) list.Add(child);
+        foreach (Transform t in parent.transform)
+            if (t.name.Contains(contains)) list.Add(t);
         return list.ToArray();
     }
 
-    private static TextMeshProUGUI CreateTMPText(GameObject parent, string name, string text,
-        Vector2 anchor, Vector2 pos, float size, FontStyles style, Color? color = null)
+    static TextMeshProUGUI MakeTMP(GameObject parent, string name, string text,
+        Vector2 anchor, Vector2 pos, Vector2 size,
+        float fontSize, FontStyles style, Color color)
     {
         var go  = new GameObject(name);
         go.transform.SetParent(parent.transform, false);
-        var tmp = go.AddComponent<TextMeshProUGUI>();
+        var tmp       = go.AddComponent<TextMeshProUGUI>();
         tmp.text      = text;
-        tmp.fontSize  = size;
+        tmp.fontSize  = fontSize;
         tmp.fontStyle = style;
-        tmp.color     = color ?? Color.white;
+        tmp.color     = color;
         tmp.alignment = TextAlignmentOptions.Center;
         var rt = go.GetComponent<RectTransform>();
-        rt.anchorMin = anchor; rt.anchorMax = anchor; rt.pivot = anchor;
+        rt.anchorMin = rt.anchorMax = rt.pivot = anchor;
         rt.anchoredPosition = pos;
-        rt.sizeDelta = new Vector2(320f, 65f);
+        rt.sizeDelta        = size;
         return tmp;
     }
 
-    private static GameObject CreatePanel(GameObject parent, string name, Color color, Vector2 pos, Vector2 size)
+    static GameObject MakePanel(GameObject parent, string name,
+        Color color, Vector2 pos, Vector2 size)
     {
         var go  = new GameObject(name);
         go.transform.SetParent(parent.transform, false);
-        var img = go.AddComponent<Image>();
+        var img   = go.AddComponent<Image>();
         img.color = color;
-        var rt  = go.GetComponent<RectTransform>();
-        rt.anchorMin = new Vector2(0.5f,0.5f); rt.anchorMax = new Vector2(0.5f,0.5f);
-        rt.pivot = new Vector2(0.5f,0.5f);
-        rt.anchoredPosition = pos; rt.sizeDelta = size;
+        var rt    = go.GetComponent<RectTransform>();
+        rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.anchoredPosition = pos;
+        rt.sizeDelta        = size;
         go.AddComponent<CanvasGroup>();
         return go;
     }
 
-    private static GameObject CreateButton(GameObject parent, string name, string label,
-        Vector2 anchor, Vector2 pos, Vector2 size, Color bg)
+    static GameObject MakeButton(GameObject parent, string name, string label,
+        Vector2 anchor, Vector2 pos, Vector2 size, Color bg, float fontSize = 22)
     {
         var go  = new GameObject(name);
         go.transform.SetParent(parent.transform, false);
-        var img = go.AddComponent<Image>();
+        var img   = go.AddComponent<Image>();
         img.color = bg;
         go.AddComponent<Button>();
-        var rt  = go.GetComponent<RectTransform>();
-        rt.anchorMin = anchor; rt.anchorMax = anchor; rt.pivot = new Vector2(0.5f,0.5f);
-        rt.anchoredPosition = pos; rt.sizeDelta = size;
+        var rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = rt.anchorMax = anchor;
+        rt.pivot     = new Vector2(0.5f, 0.5f);
+        rt.anchoredPosition = pos;
+        rt.sizeDelta        = size;
 
-        var labelObj = new GameObject("Text");
-        labelObj.transform.SetParent(go.transform, false);
-        var tmp = labelObj.AddComponent<TextMeshProUGUI>();
-        tmp.text = label; tmp.fontSize = 22; tmp.fontStyle = FontStyles.Bold;
-        tmp.color = Color.white; tmp.alignment = TextAlignmentOptions.Center;
-        var lrt = labelObj.GetComponent<RectTransform>();
-        lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
-        lrt.offsetMin = Vector2.zero; lrt.offsetMax = Vector2.zero;
+        // Label — only plain ASCII characters
+        var lbl = new GameObject("Text");
+        lbl.transform.SetParent(go.transform, false);
+        var tmp       = lbl.AddComponent<TextMeshProUGUI>();
+        tmp.text      = label;   // caller must pass plain ASCII
+        tmp.fontSize  = fontSize;
+        tmp.fontStyle = FontStyles.Bold;
+        tmp.color     = Color.white;
+        tmp.alignment = TextAlignmentOptions.Center;
+        var lrt = lbl.GetComponent<RectTransform>();
+        lrt.anchorMin = Vector2.zero;
+        lrt.anchorMax = Vector2.one;
+        lrt.offsetMin = lrt.offsetMax = Vector2.zero;
         return go;
     }
 }
