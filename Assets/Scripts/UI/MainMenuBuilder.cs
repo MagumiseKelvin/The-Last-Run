@@ -13,12 +13,13 @@ public class MainMenuBuilder : EditorWindow
     [MenuItem("The Last Run/Build Main Menu Scene")]
     public static void BuildMainMenu()
     {
-        // Clear scene
+        // Collect all root objects first, then destroy — avoids modifying collection during iteration
+        var toDestroy = new System.Collections.Generic.List<GameObject>();
         foreach (var go in Object.FindObjectsByType<GameObject>())
-        {
             if (go.transform.parent == null)
-                Object.DestroyImmediate(go);
-        }
+                toDestroy.Add(go);
+        foreach (var go in toDestroy)
+            if (go != null) Object.DestroyImmediate(go);
 
         // Camera
         var cam = new GameObject("Main Camera");

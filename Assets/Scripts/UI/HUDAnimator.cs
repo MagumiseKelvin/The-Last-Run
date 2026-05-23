@@ -25,7 +25,6 @@ public class HUDAnimator : MonoBehaviour
     public Color speedColorFast = new Color(1f, 0.35f, 0.35f);
 
     private int       _lastCoinCount   = 0;
-    private float     _lastDistance    = 0f;
     private float     _lastMilestone   = 0f;
     private Coroutine _coinCoroutine;
     private Coroutine _distCoroutine;
