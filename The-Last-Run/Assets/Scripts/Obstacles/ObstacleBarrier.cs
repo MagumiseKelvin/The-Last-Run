@@ -1,16 +1,24 @@
 using UnityEngine;
 
 /// <summary>
-/// Solid barrier — player must switch lanes to avoid.
-/// Tag: "Obstacle"
+/// A solid barrier obstacle that blocks the full lane.
+/// Player must switch lanes to avoid it.
+/// Inherits from Obstacle base class.
 /// </summary>
 public class ObstacleBarrier : Obstacle
 {
-    private void Awake() => obstacleType = "Barrier";
+    [Header("Barrier Settings")]
+    [Tooltip("If true, the barrier spans multiple lanes and cannot be avoided by switching")]
+    public bool isFullWidth = false;
 
-    public override void OnHit()
+    private void Awake()
+    {
+        obstacleType = "Barrier";
+    }
+
+    protected override void TriggerCollision(GameObject playerObject)
     {
         Debug.Log("[ObstacleBarrier] Player hit a barrier!");
-        base.OnHit();
+        base.TriggerCollision(playerObject);
     }
 }
