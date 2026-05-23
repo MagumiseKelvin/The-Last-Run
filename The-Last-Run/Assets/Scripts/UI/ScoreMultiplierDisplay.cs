@@ -35,9 +35,9 @@ public class ScoreMultiplierDisplay : MonoBehaviour
             ScoreManager.Instance.OnScoreChanged -= OnScoreChanged;
     }
 
-    private void OnScoreChanged(float score)
+    private void OnScoreChanged(int score)
     {
-        _text.text = $"{score:F0}";
+        _text.text = $"{score}";
         if (_punchCoroutine != null) StopCoroutine(_punchCoroutine);
         _punchCoroutine = StartCoroutine(PunchRoutine());
     }

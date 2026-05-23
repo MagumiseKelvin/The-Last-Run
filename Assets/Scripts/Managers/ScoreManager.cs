@@ -1,40 +1,39 @@
 using UnityEngine;
 
 /// <summary>
-/// Tracks current score, high score, distance traveled, and coins collected.
-/// Supports score multiplier from PowerUpManager.
+/// Tracks score (coins only), distance, and high score.
+/// Score = coins collected x coin value only. Distance is tracked separately.
+/// This matches Temple Run style — you earn points by collecting coins, not by surviving.
 /// </summary>
 public class ScoreManager : MonoBehaviour
 {
     public static ScoreManager Instance { get; private set; }
 
     [Header("Score Settings")]
-    [Tooltip("Score points earned per second of survival")]
-    public float scorePerSecond = 10f;
-    [Tooltip("Base score points earned per coin collected")]
+    [Tooltip("Points per coin collected")]
     public int scorePerCoin = 50;
 
-    public float CurrentScore    { get; private set; } = 0f;
-    public float HighScore       { get; private set; } = 0f;
-    public float DistanceTraveled{ get; private set; } = 0f;
-    public int   CoinsCollected  { get; private set; } = 0;
-    public bool  IsNewHighScore  { get; private set; } = false;
+    // Public read-only state
+    public int   CurrentScore     { get; private set; } = 0;
+    public int   HighScore        { get; private set; } = 0;
+    public float DistanceTraveled { get; private set; } = 0f;
+    public int   CoinsCollected   { get; private set; } = 0;
+    public int   BestCoins        { get; private set; } = 0;
+    public bool  IsNewHighScore   { get; private set; } = false;
 
-    private const string HIGH_SCORE_KEY  = "TheLastRun_HighScore";
-    private const string BEST_COINS_KEY  = "TheLastRun_BestCoins";
+    private const string HIGH_SCORE_KEY = "TheLastRun_HighScore";
+    private const string BEST_COINS_KEY = "TheLastRun_BestCoins";
 
-    public int BestCoins { get; private set; } = 0;
-
-    // Events
-    public System.Action<float> OnScoreChanged;
-    public System.Action        OnNewHighScore;
+    // Event fired when score changes (coin collected)
+    public System.Action<int> OnScoreChanged;
+    public System.Action      OnNewHighScore;
 
     private void Awake()
     {
         if (Instance != null && Instance != this) { Destroy(gameObject); return; }
         Instance = this;
 
-        HighScore = PlayerPrefs.GetFloat(HIGH_SCORE_KEY, 0f);
+        HighScore = PlayerPrefs.GetInt(HIGH_SCORE_KEY, 0);
         BestCoins = PlayerPrefs.GetInt(BEST_COINS_KEY, 0);
     }
 
@@ -42,7 +41,7 @@ public class ScoreManager : MonoBehaviour
     {
         if (GameManager.Instance != null)
         {
-            GameManager.Instance.OnGameOver   += HandleGameOver;
+            GameManager.Instance.OnGameOver    += HandleGameOver;
             GameManager.Instance.OnGameRestart += ResetScore;
         }
     }
@@ -51,7 +50,7 @@ public class ScoreManager : MonoBehaviour
     {
         if (GameManager.Instance != null)
         {
-            GameManager.Instance.OnGameOver   -= HandleGameOver;
+            GameManager.Instance.OnGameOver    -= HandleGameOver;
             GameManager.Instance.OnGameRestart -= ResetScore;
         }
     }
@@ -60,30 +59,20 @@ public class ScoreManager : MonoBehaviour
     {
         if (GameManager.Instance == null || !GameManager.Instance.IsGameRunning) return;
 
-        // Score per second, scaled by multiplier
-        float multiplier = PowerUpManager.Instance != null
-            ? PowerUpManager.Instance.GetScoreMultiplier()
-            : 1f;
-
-        AddScore(scorePerSecond * multiplier * Time.deltaTime);
-
-        // Distance
+        // Track distance — this is NOT the score, just meters run
         DistanceTraveled += GameManager.Instance.GetCurrentSpeed() * Time.deltaTime;
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
 
-    public void AddScore(float amount)
-    {
-        CurrentScore += amount;
-        OnScoreChanged?.Invoke(CurrentScore);
-    }
-
-    /// <summary>Call when a coin is collected. Multiplier applied externally.</summary>
+    /// <summary>Call when a coin is collected. Multiplier from power-ups.</summary>
     public void AddCoinScore(float multiplier = 1f)
     {
         CoinsCollected++;
-        AddScore(scorePerCoin * multiplier);
+        int points = Mathf.RoundToInt(scorePerCoin * multiplier);
+        CurrentScore += points;
+        OnScoreChanged?.Invoke(CurrentScore);
+        Debug.Log($"[ScoreManager] Coin collected! Score: {CurrentScore} | Coins: {CoinsCollected}");
     }
 
     // ── Game Over ─────────────────────────────────────────────────────────────
@@ -94,12 +83,12 @@ public class ScoreManager : MonoBehaviour
 
         if (CurrentScore > HighScore)
         {
-            HighScore = CurrentScore;
+            HighScore      = CurrentScore;
             IsNewHighScore = true;
-            PlayerPrefs.SetFloat(HIGH_SCORE_KEY, HighScore);
+            PlayerPrefs.SetInt(HIGH_SCORE_KEY, HighScore);
             OnNewHighScore?.Invoke();
             AudioManager.Instance?.PlayNewHighScore();
-            Debug.Log($"[ScoreManager] New High Score: {HighScore:F0}");
+            Debug.Log($"[ScoreManager] New High Score: {HighScore}");
         }
 
         if (CoinsCollected > BestCoins)
@@ -113,9 +102,9 @@ public class ScoreManager : MonoBehaviour
 
     private void ResetScore()
     {
-        CurrentScore   = 0f;
+        CurrentScore     = 0;
         DistanceTraveled = 0f;
-        CoinsCollected = 0;
-        IsNewHighScore = false;
+        CoinsCollected   = 0;
+        IsNewHighScore   = false;
     }
 }

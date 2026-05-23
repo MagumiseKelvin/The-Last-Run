@@ -118,20 +118,26 @@ public class GameHUD : MonoBehaviour
     {
         if (GameManager.Instance == null || !GameManager.Instance.IsGameRunning) return;
 
-        // Poll all values every frame — reliable regardless of event timing
         if (ScoreManager.Instance != null)
         {
+            // Score = coins only (not time-based)
             if (scoreText != null)
-                scoreText.text = $"{ScoreManager.Instance.CurrentScore:F0}";
+                scoreText.text = $"{ScoreManager.Instance.CurrentScore}";
+
+            // Distance = meters run
             if (distanceText != null)
                 distanceText.text = $"{ScoreManager.Instance.DistanceTraveled:F0}m";
+
+            // Coins collected count
             if (coinCountText != null)
                 coinCountText.text = $"Coins: {ScoreManager.Instance.CoinsCollected}";
+
+            // Best score (from previous runs)
             if (highScoreText != null)
-                highScoreText.text = $"Best: {ScoreManager.Instance.HighScore:F0}";
+                highScoreText.text = $"Best: {ScoreManager.Instance.HighScore}";
         }
 
-        // Speed
+        // Speed display
         if (speedText != null)
             speedText.text = $"{GameManager.Instance.GetCurrentSpeed():F0} m/s";
 
@@ -163,10 +169,10 @@ public class GameHUD : MonoBehaviour
 
     // ── Score ─────────────────────────────────────────────────────────────────
 
-    private void UpdateScoreDisplay(float score)
+    private void UpdateScoreDisplay(int score)
     {
         if (scoreText != null)
-            scoreText.text = $"{score:F0}";
+            scoreText.text = $"{score}";
     }
 
     // ── Pause ─────────────────────────────────────────────────────────────────
