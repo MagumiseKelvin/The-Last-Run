@@ -181,7 +181,7 @@ public class SceneBuilder : EditorWindow
         scaler.referenceResolution = new Vector2(1920, 1080);
         canvasObj.AddComponent<GraphicRaycaster>();
 
-        if (Object.FindFirstObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+        if (Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
         {
             GameObject es = new GameObject("EventSystem");
             es.AddComponent<UnityEngine.EventSystems.EventSystem>();
@@ -203,9 +203,16 @@ public class SceneBuilder : EditorWindow
         TextMeshProUGUI goHigh  = CreateTMPText(goPanel, "GameOverHighScoreText", "Best: 0", new Vector2(0.5f,0.5f), new Vector2(0f,25f),   32, FontStyles.Normal, Color.white);
         TextMeshProUGUI goDist  = CreateTMPText(goPanel, "GameOverDistanceText",  "0m",      new Vector2(0.5f,0.5f), new Vector2(0f,-15f),  28, FontStyles.Normal, Color.white);
         TextMeshProUGUI goCoins = CreateTMPText(goPanel, "GameOverCoinsText",     "x0",      new Vector2(0.5f,0.5f), new Vector2(0f,-50f),  28, FontStyles.Normal, Color.yellow);
-        GameObject newBestObj = CreateTMPText(goPanel, "NewBestBanner", "★ NEW BEST ★", new Vector2(0.5f,0.5f), new Vector2(0f,145f), 36, FontStyles.Bold, Color.yellow).gameObject;
+        GameObject newBestObj = new GameObject("NewBestBanner");
+        newBestObj.transform.SetParent(goPanel.transform, false);
+        TextMeshProUGUI newBest = newBestObj.AddComponent<TextMeshProUGUI>();
+        newBest.text = "★ NEW BEST ★"; newBest.fontSize = 36; newBest.fontStyle = FontStyles.Bold;
+        newBest.color = Color.yellow; newBest.alignment = TextAlignmentOptions.Center;
+        var newBestRt = newBestObj.GetComponent<RectTransform>();
+        newBestRt.anchorMin = new Vector2(0.5f,0.5f); newBestRt.anchorMax = new Vector2(0.5f,0.5f);
+        newBestRt.pivot = new Vector2(0.5f,0.5f);
+        newBestRt.anchoredPosition = new Vector2(0f,145f); newBestRt.sizeDelta = new Vector2(320f,65f);
         newBestObj.SetActive(false);
-        TextMeshProUGUI newBest = newBestObj.GetComponent<TextMeshProUGUI>();
         GameObject restartBtn = CreateButton(goPanel, "RestartButton", "PLAY AGAIN", new Vector2(0.5f,0f), new Vector2(-110f,60f), new Vector2(200f,55f), new Color(0.1f,0.7f,0.2f));
         GameObject menuBtn    = CreateButton(goPanel, "MenuButton",    "MAIN MENU",  new Vector2(0.5f,0f), new Vector2(110f,60f),  new Vector2(200f,55f), new Color(0.2f,0.4f,0.8f));
 
@@ -272,7 +279,7 @@ public class SceneBuilder : EditorWindow
     private static void ClearScene()
     {
         string[] keep = { "Main Camera", "Directional Light" };
-        foreach (var go in Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None))
+        foreach (var go in Object.FindObjectsByType<GameObject>())
         {
             if (go.transform.parent != null) continue;
             if (System.Array.Exists(keep, n => go.name == n)) continue;
