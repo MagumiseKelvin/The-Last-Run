@@ -2,7 +2,6 @@ using UnityEngine;
 
 /// <summary>
 /// Bridges PlayerController to Unity's Animator component.
-/// Safely checks for a valid AnimatorController before setting parameters.
 /// All animation parameter names are defined here as constants.
 /// </summary>
 [RequireComponent(typeof(Animator))]
@@ -13,17 +12,14 @@ public class PlayerAnimator : MonoBehaviour
     private static readonly int PARAM_IS_GROUNDED = Animator.StringToHash("IsGrounded");
     private static readonly int PARAM_JUMP        = Animator.StringToHash("Jump");
     private static readonly int PARAM_IS_SLIDING  = Animator.StringToHash("IsSliding");
-    private static readonly int PARAM_LEAN        = Animator.StringToHash("Lean");
+    private static readonly int PARAM_LEAN        = Animator.StringToHash("Lean");   // -1, 0, 1
     private static readonly int PARAM_DEATH       = Animator.StringToHash("Death");
 
     private Animator _animator;
-    private bool _hasController;
 
     private void Awake()
     {
         _animator = GetComponent<Animator>();
-        // Only drive the animator if a controller is actually assigned
-        _hasController = _animator.runtimeAnimatorController != null;
     }
 
     private void OnEnable()
@@ -46,55 +42,49 @@ public class PlayerAnimator : MonoBehaviour
 
     private void HandleGameStart()
     {
-        SetBool(PARAM_IS_RUNNING, true);
+        _animator.SetBool(PARAM_IS_RUNNING, true);
     }
 
     private void HandleGameOver()
     {
-        SetBool(PARAM_IS_RUNNING, false);
+        _animator.SetBool(PARAM_IS_RUNNING, false);
     }
 
+    /// <summary>Update grounded state every frame from PlayerController.</summary>
     public void SetGrounded(bool grounded)
     {
-        SetBool(PARAM_IS_GROUNDED, grounded);
+        _animator.SetBool(PARAM_IS_GROUNDED, grounded);
     }
 
+    /// <summary>Trigger the jump animation.</summary>
     public void PlayJump()
     {
-        if (!_hasController) return;
         _animator.SetTrigger(PARAM_JUMP);
     }
 
+    /// <summary>Enable or disable the slide animation.</summary>
     public void PlaySlide(bool sliding)
     {
-        SetBool(PARAM_IS_SLIDING, sliding);
+        _animator.SetBool(PARAM_IS_SLIDING, sliding);
     }
 
+    /// <summary>Play a lean animation when switching lanes. direction: -1 left, 1 right.</summary>
     public void PlayLeanAnimation(int direction)
     {
-        if (!_hasController) return;
         _animator.SetFloat(PARAM_LEAN, direction);
+        // Reset lean after a short delay
         CancelInvoke(nameof(ResetLean));
         Invoke(nameof(ResetLean), 0.3f);
     }
 
     private void ResetLean()
     {
-        if (!_hasController) return;
         _animator.SetFloat(PARAM_LEAN, 0f);
     }
 
+    /// <summary>Trigger the death/collision animation.</summary>
     public void PlayDeath()
     {
-        if (!_hasController) return;
         _animator.SetTrigger(PARAM_DEATH);
-    }
-
-    // ── Safe wrappers ─────────────────────────────────────────────────────────
-
-    private void SetBool(int param, bool value)
-    {
-        if (!_hasController) return;
-        _animator.SetBool(param, value);
     }
 }
