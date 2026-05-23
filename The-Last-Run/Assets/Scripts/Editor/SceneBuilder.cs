@@ -93,6 +93,10 @@ public class SceneBuilder : EditorWindow
         player.AddComponent<PlayerCollision>();
         player.AddComponent<PlayerAnimator>();
 
+        // Speed trail effect
+        player.AddComponent<TrailRenderer>(); // required by PlayerTrailEffect
+        player.AddComponent<PlayerTrailEffect>();
+
         // Animator controller
         EnsureFolder("Assets/Animations");
         const string animPath = "Assets/Animations/PlayerAnimatorController.controller";
@@ -291,6 +295,10 @@ public class SceneBuilder : EditorWindow
         var cf    = cam.GetComponent<CameraFollow>() ?? cam.AddComponent<CameraFollow>();
         cf.target = player.transform;
         cf.offset = new Vector3(0f, 3.5f, -7f);
+
+        // Camera shake on collision/game over
+        if (cam.GetComponent<CameraShake>() == null)
+            cam.AddComponent<CameraShake>();
     }
 
     // ── Lighting ──────────────────────────────────────────────────────────────
@@ -334,10 +342,11 @@ public class SceneBuilder : EditorWindow
         }
 
         // ── HUD ───────────────────────────────────────────────────────────────
-        // Score — top center, large
+        // Score — top center, large — with punch animation
         var scoreTxt = MakeTMP(canvasGO, "ScoreText", "0",
             new Vector2(0.5f, 1f), new Vector2(0f, -55f), new Vector2(300f, 70f),
             60, FontStyles.Bold, Color.white);
+        scoreTxt.gameObject.AddComponent<ScoreMultiplierDisplay>();
 
         // Distance — top left
         var distTxt = MakeTMP(canvasGO, "DistanceText", "0m",

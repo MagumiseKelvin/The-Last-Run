@@ -46,15 +46,16 @@ public class ObstacleSpawner : MonoBehaviour
 
         if (obstaclePrefabs == null || obstaclePrefabs.Length == 0) return;
 
-        // Try to spawn on each obstacle spawn point
+        // Use difficulty manager if available, otherwise use inspector value
+        float chance = TrackDifficultyManager.Instance != null
+            ? TrackDifficultyManager.Instance.GetObstacleChance()
+            : spawnChance;
+
         foreach (Transform spawnPoint in segment.obstacleSpawnPoints)
         {
             if (spawnPoint == null) continue;
-
-            if (Random.value <= spawnChance)
-            {
+            if (Random.value <= chance)
                 SpawnObstacleAt(spawnPoint);
-            }
         }
     }
 
