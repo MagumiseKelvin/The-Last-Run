@@ -2,16 +2,17 @@ using UnityEngine;
 
 /// <summary>
 /// Detects collisions between the player and obstacles or collectibles.
-/// Supports shield power-up absorption.
+/// Uses tags ("Obstacle", "Collectible") instead of layers — no layer setup needed.
+/// Also falls back to component detection for robustness.
 /// </summary>
 public class PlayerCollision : MonoBehaviour
 {
     private PlayerController _playerController;
 
-    [Header("Layer Settings")]
-    [Tooltip("Layer assigned to obstacle objects")]
+    // Keep LayerMask fields so existing Inspector assignments aren't broken,
+    // but detection now works via tags + components regardless.
+    [Header("Layer Settings (optional — tag detection is primary)")]
     public LayerMask obstacleLayer;
-    [Tooltip("Layer assigned to collectible objects (coins/relics)")]
     public LayerMask collectibleLayer;
 
     private void Awake()
@@ -19,39 +20,67 @@ public class PlayerCollision : MonoBehaviour
         _playerController = GetComponent<PlayerController>();
     }
 
-    // Called when CharacterController hits a collider
+    // CharacterController solid collisions (non-trigger obstacles)
     private void OnControllerColliderHit(ControllerColliderHit hit)
     {
-        if (GameManager.Instance == null || !GameManager.Instance.IsGameRunning) return;
-
-        if (((1 << hit.gameObject.layer) & obstacleLayer) != 0)
-        {
+        if (!IsGameRunning()) return;
+        if (IsObstacle(hit.gameObject))
             HandleObstacleHit(hit.gameObject);
-        }
     }
 
-    // Called when entering a trigger collider
+    // Trigger collisions (coins + trigger-based obstacles)
     private void OnTriggerEnter(Collider other)
     {
-        if (GameManager.Instance == null || !GameManager.Instance.IsGameRunning) return;
+        if (!IsGameRunning()) return;
 
-        // Collectible
-        if (((1 << other.gameObject.layer) & collectibleLayer) != 0)
+        if (IsCollectible(other.gameObject))
         {
             HandleCollectible(other.gameObject);
             return;
         }
 
-        // Obstacle trigger
-        if (((1 << other.gameObject.layer) & obstacleLayer) != 0)
-        {
+        if (IsObstacle(other.gameObject))
             HandleObstacleHit(other.gameObject);
-        }
     }
+
+    // ── Detection helpers ─────────────────────────────────────────────────────
+
+    private bool IsObstacle(GameObject go)
+    {
+        // Tag check (primary)
+        if (go.CompareTag("Obstacle")) return true;
+
+        // Component check (fallback — works even without tag)
+        if (go.GetComponent<Obstacle>() != null) return true;
+        if (go.GetComponentInParent<Obstacle>() != null) return true;
+
+        // Layer mask check (legacy fallback)
+        if (obstacleLayer.value != 0 && ((1 << go.layer) & obstacleLayer) != 0)
+            return true;
+
+        return false;
+    }
+
+    private bool IsCollectible(GameObject go)
+    {
+        // Tag check (primary)
+        if (go.CompareTag("Collectible")) return true;
+
+        // Component check (fallback)
+        if (go.GetComponent<Collectible>() != null) return true;
+        if (go.GetComponentInParent<Collectible>() != null) return true;
+
+        // Layer mask check (legacy fallback)
+        if (collectibleLayer.value != 0 && ((1 << go.layer) & collectibleLayer) != 0)
+            return true;
+
+        return false;
+    }
+
+    // ── Handlers ──────────────────────────────────────────────────────────────
 
     private void HandleObstacleHit(GameObject obstacle)
     {
-        // Check if shield absorbs the hit
         if (PowerUpManager.Instance != null && PowerUpManager.Instance.TryAbsorbHit())
         {
             Debug.Log("[PlayerCollision] Shield absorbed hit from: " + obstacle.name);
@@ -59,23 +88,36 @@ public class PlayerCollision : MonoBehaviour
         }
 
         Debug.Log("[PlayerCollision] Hit obstacle: " + obstacle.name);
+
+        // Trigger obstacle visual/audio effects
+        Obstacle obs = obstacle.GetComponent<Obstacle>()
+                    ?? obstacle.GetComponentInParent<Obstacle>();
+        obs?.OnHit();
+
         AudioManager.Instance?.PlayCollision();
         _playerController?.OnHitObstacle();
     }
 
     private void HandleCollectible(GameObject collectible)
     {
+        // Find the Collectible component — may be on parent
+        Collectible c = collectible.GetComponent<Collectible>()
+                     ?? collectible.GetComponentInParent<Collectible>();
+
+        if (c == null) return;
+
         Debug.Log("[PlayerCollision] Collected: " + collectible.name);
 
-        // Score with multiplier
         float multiplier = PowerUpManager.Instance != null
-            ? PowerUpManager.Instance.GetScoreMultiplier()
-            : 1f;
+            ? PowerUpManager.Instance.GetScoreMultiplier() : 1f;
 
         ScoreManager.Instance?.AddCoinScore(multiplier);
         AudioManager.Instance?.PlayCoinPickup();
+        c.OnCollected();
+    }
 
-        // Notify the collectible
-        collectible.GetComponent<Collectible>()?.OnCollected();
+    private bool IsGameRunning()
+    {
+        return GameManager.Instance != null && GameManager.Instance.IsGameRunning;
     }
 }

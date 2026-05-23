@@ -206,6 +206,8 @@ public class SceneBuilder : EditorWindow
         bCol.center    = new Vector3(0f, 0.75f, 0f);
         bCol.size      = new Vector3(2.2f, 1.5f, 0.3f);
         barrier.AddComponent<ObstacleBarrier>();
+        // Tag so PlayerCollision detects it without layer setup
+        barrier.tag = "Obstacle";
         var barrierPrefab = PrefabUtility.SaveAsPrefabAsset(barrier, "Assets/Prefabs/Obstacle_Barrier.prefab");
         Object.DestroyImmediate(barrier);
 
@@ -231,6 +233,7 @@ public class SceneBuilder : EditorWindow
         beamCol.center    = new Vector3(0f, 1.05f, 0f);
         beamCol.size      = new Vector3(7.3f, 0.22f, 0.28f);
         beam.AddComponent<ObstacleLowBeam>();
+        beam.tag = "Obstacle";
         var beamPrefab = PrefabUtility.SaveAsPrefabAsset(beam, "Assets/Prefabs/Obstacle_LowBeam.prefab");
         Object.DestroyImmediate(beam);
 
@@ -256,6 +259,7 @@ public class SceneBuilder : EditorWindow
         coinScript.scoreValue = 50;
         coinScript.spin       = true;
         coinScript.spinSpeed  = 180f;
+        coin.tag = "Collectible";
 
         var coinPrefab = PrefabUtility.SaveAsPrefabAsset(coin, "Assets/Prefabs/Coin.prefab");
         Object.DestroyImmediate(coin);
