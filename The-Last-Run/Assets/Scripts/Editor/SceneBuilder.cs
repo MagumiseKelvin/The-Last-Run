@@ -181,7 +181,7 @@ public class SceneBuilder : EditorWindow
         scaler.referenceResolution = new Vector2(1920, 1080);
         canvasObj.AddComponent<GraphicRaycaster>();
 
-        if (Object.FindObjectOfType<UnityEngine.EventSystems.EventSystem>() == null)
+        if (Object.FindFirstObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
         {
             GameObject es = new GameObject("EventSystem");
             es.AddComponent<UnityEngine.EventSystems.EventSystem>();
@@ -203,8 +203,9 @@ public class SceneBuilder : EditorWindow
         TextMeshProUGUI goHigh  = CreateTMPText(goPanel, "GameOverHighScoreText", "Best: 0", new Vector2(0.5f,0.5f), new Vector2(0f,25f),   32, FontStyles.Normal, Color.white);
         TextMeshProUGUI goDist  = CreateTMPText(goPanel, "GameOverDistanceText",  "0m",      new Vector2(0.5f,0.5f), new Vector2(0f,-15f),  28, FontStyles.Normal, Color.white);
         TextMeshProUGUI goCoins = CreateTMPText(goPanel, "GameOverCoinsText",     "x0",      new Vector2(0.5f,0.5f), new Vector2(0f,-50f),  28, FontStyles.Normal, Color.yellow);
-        TextMeshProUGUI newBest = CreateTMPText(goPanel, "NewBestBanner",         "★ NEW BEST ★", new Vector2(0.5f,0.5f), new Vector2(0f,145f), 36, FontStyles.Bold, Color.yellow);
-        newBest.gameObject.SetActive(false);
+        GameObject newBestObj = CreateTMPText(goPanel, "NewBestBanner", "★ NEW BEST ★", new Vector2(0.5f,0.5f), new Vector2(0f,145f), 36, FontStyles.Bold, Color.yellow).gameObject;
+        newBestObj.SetActive(false);
+        TextMeshProUGUI newBest = newBestObj.GetComponent<TextMeshProUGUI>();
         GameObject restartBtn = CreateButton(goPanel, "RestartButton", "PLAY AGAIN", new Vector2(0.5f,0f), new Vector2(-110f,60f), new Vector2(200f,55f), new Color(0.1f,0.7f,0.2f));
         GameObject menuBtn    = CreateButton(goPanel, "MenuButton",    "MAIN MENU",  new Vector2(0.5f,0f), new Vector2(110f,60f),  new Vector2(200f,55f), new Color(0.2f,0.4f,0.8f));
 
@@ -236,7 +237,7 @@ public class SceneBuilder : EditorWindow
         hud.gameOverHighScoreText = goHigh;
         hud.gameOverDistanceText  = goDist;
         hud.gameOverCoinsText     = goCoins;
-        hud.newHighScoreBanner    = newBest.gameObject;
+        hud.newHighScoreBanner    = newBestObj;
         hud.restartButton         = restartBtn.GetComponent<Button>();
         hud.menuButton            = menuBtn.GetComponent<Button>();
         hud.pauseButton           = pauseBtn.GetComponent<Button>();
@@ -253,7 +254,7 @@ public class SceneBuilder : EditorWindow
         goUI.highScoreText   = goHigh;
         goUI.distanceText    = goDist;
         goUI.coinsText       = goCoins;
-        goUI.newBestBanner   = newBest.gameObject;
+        goUI.newBestBanner   = newBestObj;
         goUI.restartButton   = restartBtn.GetComponent<Button>();
         goUI.mainMenuButton  = menuBtn.GetComponent<Button>();
 
@@ -271,7 +272,7 @@ public class SceneBuilder : EditorWindow
     private static void ClearScene()
     {
         string[] keep = { "Main Camera", "Directional Light" };
-        foreach (var go in Object.FindObjectsOfType<GameObject>())
+        foreach (var go in Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None))
         {
             if (go.transform.parent != null) continue;
             if (System.Array.Exists(keep, n => go.name == n)) continue;
