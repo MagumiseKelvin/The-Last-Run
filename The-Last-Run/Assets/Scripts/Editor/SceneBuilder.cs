@@ -45,22 +45,52 @@ public class SceneBuilder : EditorWindow
         ground.name = "Ground";
         ground.transform.position   = new Vector3(0f, -0.15f, 50f);
         ground.transform.localScale = new Vector3(5f, 1f, 100f);
-        SetColor(ground, new Color(0.22f, 0.22f, 0.25f));
+        SetColor(ground, new Color(0.08f, 0.08f, 0.10f)); // near-black dark slate
 
         // ── Track Segment Prefab ──────────────────────────────────────────────
         EnsureFolder("Assets/Prefabs");
 
-        GameObject trackSeg = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        trackSeg.name = "TrackSegment_Straight";
-        trackSeg.transform.localScale = new Vector3(7.5f, 0.2f, 30f);
-        SetColor(trackSeg, new Color(0.28f, 0.28f, 0.32f));
+        GameObject trackSeg = new GameObject("TrackSegment_Straight");
+
+        // Road surface — dark asphalt
+        GameObject road = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        road.name = "Road";
+        road.transform.SetParent(trackSeg.transform, false);
+        road.transform.localScale    = new Vector3(7.5f, 0.2f, 30f);
+        road.transform.localPosition = Vector3.zero;
+        SetColor(road, new Color(0.12f, 0.12f, 0.14f));
+
+        // Lane dividers — two thin white strips
+        for (int i = 0; i < 2; i++)
+        {
+            GameObject divider = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            divider.name = $"LaneDivider_{i}";
+            divider.transform.SetParent(trackSeg.transform, false);
+            divider.transform.localScale    = new Vector3(0.08f, 0.21f, 30f);
+            divider.transform.localPosition = new Vector3((i == 0 ? -1.25f : 1.25f), 0f, 0f);
+            SetColor(divider, new Color(0.9f, 0.9f, 0.9f));
+            Object.DestroyImmediate(divider.GetComponent<BoxCollider>());
+        }
+
+        // Side walls — dark grey borders
+        for (int i = 0; i < 2; i++)
+        {
+            GameObject wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            wall.name = $"SideWall_{i}";
+            wall.transform.SetParent(trackSeg.transform, false);
+            wall.transform.localScale    = new Vector3(0.3f, 0.8f, 30f);
+            wall.transform.localPosition = new Vector3((i == 0 ? -3.9f : 3.9f), 0.3f, 0f);
+            SetColor(wall, new Color(0.18f, 0.18f, 0.22f));
+            Object.DestroyImmediate(wall.GetComponent<BoxCollider>());
+        }
+
         trackSeg.AddComponent<TrackSegment>();
 
-        // Obstacle spawn points
+        // Obstacle spawn points — one per lane
         for (int i = 0; i < 3; i++)
         {
             GameObject sp = CreateEmpty($"ObstacleSpawn_{i + 1}", trackSeg.transform);
-            sp.transform.localPosition = new Vector3((i - 1) * 2.5f, 0.6f, (i % 3) * 5f - 5f);
+            sp.transform.localPosition = new Vector3((i - 1) * 2.5f, 0.1f, (i % 3) * 6f - 6f);
         }
         // Coin spawn points
         for (int i = 0; i < 3; i++)
@@ -79,24 +109,85 @@ public class SceneBuilder : EditorWindow
 
         trackManagerObj.GetComponent<TrackManager>().trackSegmentPrefabs = new GameObject[] { trackPrefab };
 
-        // ── Obstacle Prefab ───────────────────────────────────────────────────
-        GameObject barrierObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        barrierObj.name = "Obstacle_Barrier";
-        barrierObj.transform.localScale = new Vector3(2.4f, 1.5f, 0.4f);
-        SetColor(barrierObj, new Color(0.85f, 0.1f, 0.1f));
+        // ── Barrier Obstacle (full-height wall — must dodge left/right) ───────
+        GameObject barrierObj = new GameObject("Obstacle_Barrier");
+        // Main body
+        GameObject barrierBody = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        barrierBody.name = "Body";
+        barrierBody.transform.SetParent(barrierObj.transform, false);
+        barrierBody.transform.localScale    = new Vector3(2.2f, 1.6f, 0.35f);
+        barrierBody.transform.localPosition = new Vector3(0f, 0.8f, 0f);
+        SetColor(barrierBody, new Color(0.95f, 0.95f, 1.0f));  // bright white
+        // Warning stripes — orange accent bar
+        GameObject stripe = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        stripe.name = "Stripe";
+        stripe.transform.SetParent(barrierObj.transform, false);
+        stripe.transform.localScale    = new Vector3(2.2f, 0.18f, 0.36f);
+        stripe.transform.localPosition = new Vector3(0f, 1.3f, 0f);
+        SetColor(stripe, new Color(1f, 0.45f, 0f));  // orange
+        Object.DestroyImmediate(stripe.GetComponent<BoxCollider>());
+        // Trigger collider on root
+        BoxCollider barrierCol = barrierObj.AddComponent<BoxCollider>();
+        barrierCol.isTrigger = true;
+        barrierCol.center = new Vector3(0f, 0.8f, 0f);
+        barrierCol.size   = new Vector3(2.2f, 1.6f, 0.35f);
         barrierObj.AddComponent<ObstacleBarrier>();
-        barrierObj.GetComponent<BoxCollider>().isTrigger = true;
         GameObject barrierPrefab = PrefabUtility.SaveAsPrefabAsset(barrierObj, "Assets/Prefabs/Obstacle_Barrier.prefab");
         Object.DestroyImmediate(barrierObj);
-        obstacleSpawnerObj.GetComponent<ObstacleSpawner>().obstaclePrefabs = new GameObject[] { barrierPrefab };
 
-        // ── Coin Prefab ───────────────────────────────────────────────────────
-        GameObject coinObj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        coinObj.name = "Coin";
-        coinObj.transform.localScale = new Vector3(0.4f, 0.4f, 0.4f);
-        SetColor(coinObj, new Color(1f, 0.85f, 0f));
-        coinObj.AddComponent<Collectible>();
-        coinObj.GetComponent<SphereCollider>().isTrigger = true;
+        // ── Low Beam Obstacle (must slide under) ──────────────────────────────
+        GameObject beamObj = new GameObject("Obstacle_LowBeam");
+        // Horizontal beam
+        GameObject beam = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        beam.name = "Beam";
+        beam.transform.SetParent(beamObj.transform, false);
+        beam.transform.localScale    = new Vector3(7.4f, 0.25f, 0.3f);
+        beam.transform.localPosition = new Vector3(0f, 1.1f, 0f);
+        SetColor(beam, new Color(1f, 0.2f, 0.2f));  // red beam
+        // Left post
+        GameObject postL = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        postL.name = "PostL";
+        postL.transform.SetParent(beamObj.transform, false);
+        postL.transform.localScale    = new Vector3(0.2f, 1.1f, 0.2f);
+        postL.transform.localPosition = new Vector3(-3.5f, 0.55f, 0f);
+        SetColor(postL, new Color(0.8f, 0.8f, 0.8f));
+        Object.DestroyImmediate(postL.GetComponent<BoxCollider>());
+        // Right post
+        GameObject postR = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        postR.name = "PostR";
+        postR.transform.SetParent(beamObj.transform, false);
+        postR.transform.localScale    = new Vector3(0.2f, 1.1f, 0.2f);
+        postR.transform.localPosition = new Vector3(3.5f, 0.55f, 0f);
+        SetColor(postR, new Color(0.8f, 0.8f, 0.8f));
+        Object.DestroyImmediate(postR.GetComponent<BoxCollider>());
+        // Trigger collider
+        BoxCollider beamCol = beamObj.AddComponent<BoxCollider>();
+        beamCol.isTrigger = true;
+        beamCol.center = new Vector3(0f, 1.1f, 0f);
+        beamCol.size   = new Vector3(7.4f, 0.25f, 0.3f);
+        beamObj.AddComponent<ObstacleLowBeam>();
+        GameObject beamPrefab = PrefabUtility.SaveAsPrefabAsset(beamObj, "Assets/Prefabs/Obstacle_LowBeam.prefab");
+        Object.DestroyImmediate(beamObj);
+
+        obstacleSpawnerObj.GetComponent<ObstacleSpawner>().obstaclePrefabs = new GameObject[] { barrierPrefab, beamPrefab };
+
+        // ── Coin Prefab — gold spinning disc ─────────────────────────────────
+        GameObject coinObj = new GameObject("Coin");
+        GameObject coinDisc = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        coinDisc.name = "Disc";
+        coinDisc.transform.SetParent(coinObj.transform, false);
+        coinDisc.transform.localScale    = new Vector3(0.45f, 0.06f, 0.45f);
+        coinDisc.transform.localPosition = Vector3.zero;
+        SetColor(coinDisc, new Color(1f, 0.82f, 0f));  // gold
+        Object.DestroyImmediate(coinDisc.GetComponent<CapsuleCollider>());
+        // Trigger collider on root
+        SphereCollider coinCol = coinObj.AddComponent<SphereCollider>();
+        coinCol.isTrigger = true;
+        coinCol.radius = 0.35f;
+        Collectible coinScript = coinObj.AddComponent<Collectible>();
+        coinScript.scoreValue = 50;
+        coinScript.spin = true;
+        coinScript.spinSpeed = 200f;
         GameObject coinPrefab = PrefabUtility.SaveAsPrefabAsset(coinObj, "Assets/Prefabs/Coin.prefab");
         Object.DestroyImmediate(coinObj);
         collectibleSpawnerObj.GetComponent<CollectibleSpawner>().coinPrefab = coinPrefab;
@@ -106,7 +197,7 @@ public class SceneBuilder : EditorWindow
         player.name = "Player";
         player.transform.position = new Vector3(0f, 1f, 0f);
         player.tag = "Player";
-        SetColor(player, new Color(1f, 0.47f, 0f));
+        SetColor(player, new Color(0.2f, 0.6f, 1.0f));  // cool blue
         Object.DestroyImmediate(player.GetComponent<CapsuleCollider>());
 
         CharacterController cc = player.AddComponent<CharacterController>();
@@ -217,7 +308,7 @@ public class SceneBuilder : EditorWindow
         GameObject menuBtn    = CreateButton(goPanel, "MenuButton",    "MAIN MENU",  new Vector2(0.5f,0f), new Vector2(110f,60f),  new Vector2(200f,55f), new Color(0.2f,0.4f,0.8f));
 
         // Pause button
-        GameObject pauseBtn = CreateButton(canvasObj, "PauseButton", "❚❚", new Vector2(1f,1f), new Vector2(-50f,-50f), new Vector2(60f,60f), new Color(0.2f,0.2f,0.2f,0.7f));
+        GameObject pauseBtn = CreateButton(canvasObj, "PauseButton", "II", new Vector2(1f,1f), new Vector2(-50f,-50f), new Vector2(60f,60f), new Color(0.15f,0.15f,0.15f,0.8f));
 
         // Pause Panel
         GameObject pausePanel = CreatePanel(canvasObj, "PausePanel", new Color(0f,0f,0f,0.92f), Vector2.zero, new Vector2(420f,420f));
