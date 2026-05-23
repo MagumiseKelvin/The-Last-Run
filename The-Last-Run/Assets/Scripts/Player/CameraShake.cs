@@ -44,7 +44,11 @@ public class CameraShake : MonoBehaviour
         _shakeCoroutine = StartCoroutine(ShakeRoutine(duration, magnitude));
     }
 
-    public void ShakeOnCoin() => Shake(coinShakeDuration, coinShakeMagnitude);
+    public void ShakeOnCoin()
+    {
+        // Intentionally disabled — coin shake causes UI to vibrate
+        // Only game-over shake is used
+    }
 
     private IEnumerator ShakeRoutine(float duration, float magnitude)
     {
