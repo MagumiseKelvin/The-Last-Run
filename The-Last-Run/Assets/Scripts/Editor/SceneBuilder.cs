@@ -244,7 +244,7 @@ public class SceneBuilder : EditorWindow
         hud.gameOverHighScoreText = goHigh;
         hud.gameOverDistanceText  = goDist;
         hud.gameOverCoinsText     = goCoins;
-        hud.newHighScoreBanner    = newBestObj;
+        hud.newHighScoreBanner    = newBest;
         hud.restartButton         = restartBtn.GetComponent<Button>();
         hud.menuButton            = menuBtn.GetComponent<Button>();
         hud.pauseButton           = pauseBtn.GetComponent<Button>();
