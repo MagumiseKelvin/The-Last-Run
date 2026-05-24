@@ -16,6 +16,11 @@ public class SceneBuilder : EditorWindow
     {
         Debug.Log("[SceneBuilder] Building scene...");
 
+        // ── Ensure required tags exist ────────────────────────────────────────
+        EnsureTag("Obstacle");
+        EnsureTag("Collectible");
+        EnsureTag("Player");
+
         // Delete old prefabs so they get recreated fresh
         DeleteAssetIfExists("Assets/Prefabs/TrackSegment_Straight.prefab");
         DeleteAssetIfExists("Assets/Prefabs/Obstacle_Barrier.prefab");
@@ -562,6 +567,28 @@ public class SceneBuilder : EditorWindow
     {
         if (AssetDatabase.LoadAssetAtPath<Object>(path) != null)
             AssetDatabase.DeleteAsset(path);
+    }
+
+    static void EnsureTag(string tagName)
+    {
+        // Read the TagManager asset
+        SerializedObject tagManager = new SerializedObject(
+            AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/TagManager.asset")[0]);
+
+        SerializedProperty tagsProp = tagManager.FindProperty("tags");
+
+        // Check if tag already exists
+        for (int i = 0; i < tagsProp.arraySize; i++)
+        {
+            if (tagsProp.GetArrayElementAtIndex(i).stringValue == tagName)
+                return; // already exists
+        }
+
+        // Add the tag
+        tagsProp.InsertArrayElementAtIndex(tagsProp.arraySize);
+        tagsProp.GetArrayElementAtIndex(tagsProp.arraySize - 1).stringValue = tagName;
+        tagManager.ApplyModifiedProperties();
+        Debug.Log($"[SceneBuilder] Created tag: {tagName}");
     }
 
     static void EnsureFolder(string path)
