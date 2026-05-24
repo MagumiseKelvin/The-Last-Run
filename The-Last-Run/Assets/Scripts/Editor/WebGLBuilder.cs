@@ -21,9 +21,8 @@ public class WebGLBuilder : EditorWindow
         PlayerSettings.bundleVersion = "1.0.0";
 
         // WebGL specific settings
-        PlayerSettings.WebGL.compressionFormat    = WebGLCompressionFormat.Gzip;
+        PlayerSettings.WebGL.compressionFormat     = WebGLCompressionFormat.Gzip;
         PlayerSettings.WebGL.decompressionFallback = true;
-        PlayerSettings.WebGL.template             = "APPLICATION:Default";
 
         // Resolution
         PlayerSettings.defaultScreenWidth  = 960;
@@ -128,7 +127,6 @@ public class WebGLBuilder : EditorWindow
         // Open browser after a short delay
         EditorApplication.delayCall += () =>
         {
-            System.Threading.Thread.Sleep(2000);
             Application.OpenURL("http://localhost:8080");
         };
 
