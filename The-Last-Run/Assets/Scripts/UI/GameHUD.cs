@@ -72,13 +72,31 @@ public class GameHUD : MonoBehaviour
         SetActive(multiplierIndicator, false);
         SetActive(multiplierText?.gameObject, false);
 
-        // Buttons
+        // Buttons — use direct scene reload for WebGL reliability
         pauseButton?.onClick.AddListener(TogglePause);
         resumeButton?.onClick.AddListener(TogglePause);
-        pauseRestartButton?.onClick.AddListener(() => { ResumeTime(); GameManager.Instance?.RestartGame(); });
-        pauseMenuButton?.onClick.AddListener(() => { ResumeTime(); GameManager.Instance?.GoToMainMenu(); });
-        restartButton?.onClick.AddListener(() => GameManager.Instance?.RestartGame());
-        menuButton?.onClick.AddListener(() => GameManager.Instance?.GoToMainMenu());
+        pauseRestartButton?.onClick.AddListener(() =>
+        {
+            ResumeTime();
+            UnityEngine.SceneManagement.SceneManager.LoadScene(
+                UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
+        });
+        pauseMenuButton?.onClick.AddListener(() =>
+        {
+            ResumeTime();
+            GameManager.Instance?.GoToMainMenu();
+        });
+        restartButton?.onClick.AddListener(() =>
+        {
+            Time.timeScale = 1f;
+            UnityEngine.SceneManagement.SceneManager.LoadScene(
+                UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
+        });
+        menuButton?.onClick.AddListener(() =>
+        {
+            Time.timeScale = 1f;
+            GameManager.Instance?.GoToMainMenu();
+        });
 
         // Start with countdown then launch game
         StartCoroutine(CountdownRoutine());
@@ -212,33 +230,37 @@ public class GameHUD : MonoBehaviour
 
     private IEnumerator ShowGameOverRoutine()
     {
-        yield return new WaitForSeconds(0.8f); // brief delay before showing panel
+        // Short delay so player sees the crash
+        yield return new WaitForSecondsRealtime(1.0f);
 
         SetActive(gameOverPanel, true);
 
+        // Make sure CanvasGroup is fully visible
+        if (gameOverCanvasGroup != null)
+            gameOverCanvasGroup.alpha = 1f;
+
         if (ScoreManager.Instance != null)
         {
-            if (gameOverScoreText    != null) gameOverScoreText.text    = $"{ScoreManager.Instance.CurrentScore:F0}";
-            if (gameOverHighScoreText != null) gameOverHighScoreText.text = $"Best: {ScoreManager.Instance.HighScore:F0}";
+            if (gameOverScoreText     != null) gameOverScoreText.text     = $"{ScoreManager.Instance.CurrentScore}";
+            if (gameOverHighScoreText != null) gameOverHighScoreText.text = $"Best: {ScoreManager.Instance.HighScore}";
             if (gameOverDistanceText  != null) gameOverDistanceText.text  = $"{ScoreManager.Instance.DistanceTraveled:F0}m";
-            if (gameOverCoinsText     != null) gameOverCoinsText.text     = $"x{ScoreManager.Instance.CoinsCollected}";
-
-            // New high score banner
-            if (newHighScoreBanner != null)
+            if (gameOverCoinsText     != null) gameOverCoinsText.text     = $"Coins: {ScoreManager.Instance.CoinsCollected}";
+            if (newHighScoreBanner    != null)
                 newHighScoreBanner.gameObject.SetActive(ScoreManager.Instance.IsNewHighScore);
         }
 
-        // Fade in the panel
+        // Fade in smoothly using unscaled time (works even if timeScale = 0)
         if (gameOverCanvasGroup != null)
         {
             gameOverCanvasGroup.alpha = 0f;
             float t = 0f;
             while (t < 1f)
             {
-                t += Time.unscaledDeltaTime * 2f;
+                t += Time.unscaledDeltaTime * 2.5f;
                 gameOverCanvasGroup.alpha = Mathf.Clamp01(t);
                 yield return null;
             }
+            gameOverCanvasGroup.alpha = 1f;
         }
     }
 

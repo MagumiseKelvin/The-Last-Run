@@ -289,12 +289,21 @@ public class SceneBuilder : EditorWindow
             cam.AddComponent<Camera>();
             cam.tag = "MainCamera";
         }
-        cam.transform.position = new Vector3(0f, 4.5f, -7f);
-        cam.transform.rotation = Quaternion.Euler(14f, 0f, 0f);
+
+        // Position camera behind and above player — good third-person runner view
+        cam.transform.position = new Vector3(0f, 3.5f, -5f);
+        cam.transform.rotation = Quaternion.Euler(18f, 0f, 0f);
+
+        // Set camera background to dark sky color
+        var camComp = cam.GetComponent<Camera>();
+        camComp.backgroundColor = new Color(0.1f, 0.12f, 0.18f);
+        camComp.clearFlags      = CameraClearFlags.SolidColor;
+        camComp.fieldOfView     = 70f;
 
         var cf    = cam.GetComponent<CameraFollow>() ?? cam.AddComponent<CameraFollow>();
         cf.target = player.transform;
-        cf.offset = new Vector3(0f, 3.5f, -7f);
+        cf.offset = new Vector3(0f, 3.5f, -5f);
+        cf.lookAtOffset = new Vector3(0f, 0.5f, 8f);
 
         // Camera shake on collision/game over
         if (cam.GetComponent<CameraShake>() == null)

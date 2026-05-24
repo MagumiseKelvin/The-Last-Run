@@ -24,10 +24,11 @@ public class WebGLBuilder : EditorWindow
         PlayerSettings.WebGL.compressionFormat     = WebGLCompressionFormat.Gzip;
         PlayerSettings.WebGL.decompressionFallback = true;
 
-        // Resolution
-        PlayerSettings.defaultScreenWidth  = 960;
-        PlayerSettings.defaultScreenHeight = 600;
+        // Resolution — standard widescreen, fills browser
+        PlayerSettings.defaultScreenWidth  = 1280;
+        PlayerSettings.defaultScreenHeight = 720;
         PlayerSettings.runInBackground     = true;
+        PlayerSettings.fullScreenMode      = FullScreenMode.FullScreenWindow;
 
         // ── Step 2: Set scenes ────────────────────────────────────────────────
         // Find the Game scene
